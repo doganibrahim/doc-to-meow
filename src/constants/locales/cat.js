@@ -11,5 +11,13 @@ export const cat = {
   avatarColor: "Mew-Color Selection",
   saveBtn: "Meow Save Info",
   successMsg: "Purr-fect! {name} is meow-mbership!",
-  addAnother: "Mrow Another Kitty"
+  addAnother: "Mrow Another Kitty",
+  dashboardTitle: "Mew Kitties",
+  emptyCats: "No purrs yet! Mrow your first kitty.",
+  addNewCat: "+ Mrow New Kitty",
+  backToDashboard: "Purr to Dashboard",
+  catAgeLabel: "Purrs: {age} years",
+  catWeightLabel: "Cat-power: {weight} kg",
+  selectCatPrompt: "Mew a kitty to purr their 3D avatar!",
+  deleteCat: "Hiss"
 };

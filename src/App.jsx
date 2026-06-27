@@ -25,28 +25,77 @@ function App() {
 
   const isDesktop = windowWidth >= 768;
 
-  // Form State
+  // Persistent Cats State
+  const [cats, setCats] = useState(() => {
+    try {
+      const saved = localStorage.getItem('doc_to_meow_cats');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+
+  // Navigation / Selected States
+  const [viewMode, setViewMode] = useState('dashboard'); // 'dashboard' | 'add'
+  const [selectedCatId, setSelectedCatId] = useState(() => {
+    try {
+      const saved = localStorage.getItem('doc_to_meow_cats');
+      const parsed = saved ? JSON.parse(saved) : [];
+      return parsed.length > 0 ? parsed[0].id : null;
+    } catch (e) {
+      return null;
+    }
+  });
+
+  // Form Input States
   const [catName, setCatName] = useState('');
   const [catAge, setCatAge] = useState('');
   const [catWeight, setCatWeight] = useState('');
   const [avatarColor, setAvatarColor] = useState('orange');
-  const [isSubmitted, setIsSubmitted] = useState(false);
+
+  // Sync to localStorage
+  useEffect(() => {
+    localStorage.setItem('doc_to_meow_cats', JSON.stringify(cats));
+  }, [cats]);
 
   const texts = { en, cat };
   const active = texts[lang];
 
+  const selectedCat = cats.find(c => c.id === selectedCatId);
+  const activeViewerColor = viewMode === 'add' ? avatarColor : (selectedCat ? selectedCat.color : 'orange');
+
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!catName.trim()) return;
-    setIsSubmitted(true);
-  };
 
-  const handleReset = () => {
+    const newCat = {
+      id: Date.now().toString(),
+      name: catName,
+      age: catAge,
+      weight: catWeight,
+      color: avatarColor
+    };
+
+    setCats(prev => [...prev, newCat]);
+    setSelectedCatId(newCat.id);
+    setViewMode('dashboard');
+
+    // Clear form fields
     setCatName('');
     setCatAge('');
     setCatWeight('');
     setAvatarColor('orange');
-    setIsSubmitted(false);
+  };
+
+  const handleDeleteCat = (id, e) => {
+    e.stopPropagation();
+    setCats(prev => {
+      const updated = prev.filter(c => c.id !== id);
+      if (selectedCatId === id) {
+        setSelectedCatId(updated.length > 0 ? updated[0].id : null);
+      }
+      return updated;
+    });
   };
 
   return (
@@ -166,8 +215,8 @@ function App() {
                   fontSize: '14px',
                   transition: 'background-color 0.2s'
                 }}
-                onMouseOver={(e) => e.target.style.backgroundColor = COLORS.primaryDark}
-                onMouseOut={(e) => e.target.style.backgroundColor = COLORS.primary}
+                onMouseOver={(e) => e.currentTarget.style.backgroundColor = COLORS.primaryDark}
+                onMouseOut={(e) => e.currentTarget.style.backgroundColor = COLORS.primary}
               >
                 {active.signUp}
               </button>
@@ -175,67 +224,124 @@ function App() {
           </div>
         </Show>
 
-        {/* SIGNED IN STATE (ADD PET INTERFACE) */}
+        {/* SIGNED IN STATE (MY CATS DASHBOARD) */}
         <Show when="signed-in">
-          {!isSubmitted ? (
-            <form onSubmit={handleSubmit} style={{ textAlign: 'left', marginTop: '15px' }}>
-              <h2
-                style={{
-                  fontFamily: '"Lilita One", sans-serif',
-                  fontSize: '32px',
-                  color: COLORS.primary,
-                  margin: '0 0 20px 0',
-                  textAlign: 'center'
-                }}
-              >
-                {active.addPetTitle}
-              </h2>
-
-              <div
-                style={{
-                  display: 'flex',
-                  flexDirection: isDesktop ? 'row' : 'column',
-                  gap: '40px',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}
-              >
-                {/* Left Column: Avatar & Colors */}
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                  {/* Three.js Canvas Container */}
-                  <CatAvatar3D color={avatarColor} width={isDesktop ? 360 : 220} height={isDesktop ? 360 : 220} />
-
-                  {/* Avatar Color Selector */}
-                  <div style={{ marginBottom: '20px', textAlign: 'center' }}>
-                    <p style={{ margin: '0 0 10px 0', fontSize: '13px', fontWeight: 'bold', color: '#555' }}>
-                      {active.avatarColor}
-                    </p>
-                    <div style={{ display: 'flex', gap: '14px', justifyContent: 'center' }}>
-                      {Object.keys(CAT_COLORS).map((c) => (
-                        <button
-                          key={c}
-                          type="button"
-                          onClick={() => setAvatarColor(c)}
-                          style={{
-                            width: '32px',
-                            height: '32px',
-                            borderRadius: '50%',
-                            backgroundColor: CAT_COLORS[c].body,
-                            border: avatarColor === c ? `3px solid ${COLORS.secondary}` : '2px solid #E5E7EB',
-                            cursor: 'pointer',
-                            transform: avatarColor === c ? 'scale(1.15)' : 'scale(1.0)',
-                            transition: 'transform 0.2s, border 0.2s',
-                            boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
-                          }}
-                          title={c}
-                        />
-                      ))}
-                    </div>
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: isDesktop ? 'row' : 'column',
+              gap: '40px',
+              alignItems: 'stretch',
+              justifyContent: 'center',
+              marginTop: '15px'
+            }}
+          >
+            {/* Left Column: 3D Cat Viewer & Color Selector */}
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+              <CatAvatar3D color={activeViewerColor} width={isDesktop ? 360 : 220} height={isDesktop ? 360 : 220} />
+              
+              {viewMode === 'add' && (
+                <div style={{ marginBottom: '20px', textAlign: 'center' }}>
+                  <p style={{ margin: '0 0 10px 0', fontSize: '13px', fontWeight: 'bold', color: '#555' }}>
+                    {active.avatarColor}
+                  </p>
+                  <div style={{ display: 'flex', gap: '14px', justifyContent: 'center' }}>
+                    {Object.keys(CAT_COLORS).map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => setAvatarColor(c)}
+                        style={{
+                          width: '32px',
+                          height: '32px',
+                          borderRadius: '50%',
+                          backgroundColor: CAT_COLORS[c].body,
+                          border: avatarColor === c ? `3px solid ${COLORS.secondary}` : '2px solid #E5E7EB',
+                          cursor: 'pointer',
+                          transform: avatarColor === c ? 'scale(1.15)' : 'scale(1.0)',
+                          transition: 'transform 0.2s, border 0.2s',
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
+                        }}
+                        title={c}
+                      />
+                    ))}
                   </div>
                 </div>
+              )}
 
-                {/* Right Column: Form Fields */}
-                <div style={{ flex: 1, width: '100%' }}>
+              {viewMode === 'dashboard' && selectedCat && (
+                <div style={{
+                  padding: '10px 20px',
+                  borderRadius: '12px',
+                  backgroundColor: COLORS.bgLight,
+                  color: COLORS.primaryDark,
+                  fontWeight: 'bold',
+                  fontSize: '14px',
+                  marginBottom: '20px'
+                }}>
+                  {selectedCat.name} 🐾
+                </div>
+              )}
+            </div>
+
+            {/* Right Column: Dynamic Content Panel */}
+            <div style={{ flex: 1, width: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+              {viewMode === 'add' ? (
+                /* ADD MODE FORM */
+                <form onSubmit={handleSubmit} style={{ textAlign: 'left', width: '100%' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
+                    <button
+                      type="button"
+                      onClick={() => setViewMode('dashboard')}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: '36px',
+                        height: '36px',
+                        borderRadius: '50%',
+                        backgroundColor: '#F3F4F6',
+                        border: 'none',
+                        color: '#4B5563',
+                        cursor: 'pointer',
+                        transition: 'background-color 0.2s',
+                        outline: 'none'
+                      }}
+                      onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#E5E7EB'}
+                      onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#F3F4F6'}
+                      title={active.backToDashboard}
+                    >
+                      <svg
+                        viewBox="0 0 512 512"
+                        style={{
+                          width: '14px',
+                          height: '14px',
+                          display: 'block'
+                        }}
+                      >
+                        <path
+                          fill="none"
+                          stroke="currentColor"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeMiterlimit="2.613"
+                          strokeWidth="48"
+                          d="M366.277,26.814L154.719,238.271c-10.729,10.221-10.729,26.192,0,36.413l211.559,211.455"
+                        />
+                      </svg>
+                    </button>
+                    <h2
+                      style={{
+                        fontFamily: '"Lilita One", sans-serif',
+                        fontSize: '32px',
+                        color: COLORS.primary,
+                        margin: 0
+                      }}
+                    >
+                      {active.addPetTitle}
+                    </h2>
+                  </div>
+
                   {/* Name field */}
                   <div style={{ marginBottom: '20px' }}>
                     <label style={{ display: 'block', fontSize: '13px', fontWeight: 'bold', color: '#555', marginBottom: '6px' }}>
@@ -263,7 +369,7 @@ function App() {
                     />
                   </div>
 
-                  <div style={{ display: 'flex', gap: '16px', marginBottom: '30px' }}>
+                  <div style={{ display: 'flex', gap: '16px', marginBottom: '25px' }}>
                     {/* Age field */}
                     <div style={{ flex: 1 }}>
                       <label style={{ display: 'block', fontSize: '13px', fontWeight: 'bold', color: '#555', marginBottom: '6px' }}>
@@ -336,49 +442,153 @@ function App() {
                       transition: 'background-color 0.2s',
                       boxShadow: `0 4px 14px rgba(252, 163, 77, 0.3)`
                     }}
-                    onMouseOver={(e) => e.target.style.backgroundColor = COLORS.primaryDark}
-                    onMouseOut={(e) => e.target.style.backgroundColor = COLORS.primary}
+                    onMouseOver={(e) => e.currentTarget.style.backgroundColor = COLORS.primaryDark}
+                    onMouseOut={(e) => e.currentTarget.style.backgroundColor = COLORS.primary}
                   >
                     {active.saveBtn}
                   </button>
-                </div>
-              </div>
-            </form>
-          ) : (
-            <div style={{ padding: '30px 10px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              <div style={{ fontSize: '64px', marginBottom: '20px', animate: 'bounce' }}>😻</div>
-              <h2
-                style={{
-                  fontFamily: '"Lilita One", sans-serif',
-                  fontSize: '26px',
-                  color: COLORS.primary,
-                  margin: '0 0 15px 0'
-                }}
-              >
-                {active.successMsg.replace('{name}', catName)}
-              </h2>
+                </form>
+              ) : (
+                /* DASHBOARD VIEW MODE */
+                <div style={{ textAlign: 'left', width: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                    <h2
+                      style={{
+                        fontFamily: '"Lilita One", sans-serif',
+                        fontSize: '32px',
+                        color: COLORS.primary,
+                        margin: 0
+                      }}
+                    >
+                      {active.dashboardTitle}
+                    </h2>
+                    <button
+                      onClick={() => setViewMode('add')}
+                      style={{
+                        padding: '8px 16px',
+                        backgroundColor: COLORS.primary,
+                        border: 'none',
+                        color: '#FFFFFF',
+                        borderRadius: '8px',
+                        fontWeight: 'bold',
+                        cursor: 'pointer',
+                        fontSize: '13px',
+                        transition: 'background-color 0.2s',
+                        boxShadow: `0 2px 8px rgba(252, 163, 77, 0.2)`
+                      }}
+                      onMouseOver={(e) => e.currentTarget.style.backgroundColor = COLORS.primaryDark}
+                      onMouseOut={(e) => e.currentTarget.style.backgroundColor = COLORS.primary}
+                    >
+                      {active.addNewCat}
+                    </button>
+                  </div>
 
-              <button
-                onClick={handleReset}
-                style={{
-                  padding: '12px 24px',
-                  backgroundColor: COLORS.primary,
-                  border: 'none',
-                  color: '#FFFFFF',
-                  borderRadius: '8px',
-                  fontWeight: 'bold',
-                  cursor: 'pointer',
-                  fontSize: '14px',
-                  transition: 'background-color 0.2s',
-                  marginTop: '10px'
-                }}
-                onMouseOver={(e) => e.target.style.backgroundColor = COLORS.primaryDark}
-                onMouseOut={(e) => e.target.style.backgroundColor = COLORS.primary}
-              >
-                {active.addAnother}
-              </button>
+                  {cats.length === 0 ? (
+                    <div style={{
+                      padding: '40px 20px',
+                      textAlign: 'center',
+                      backgroundColor: '#F9FAFB',
+                      borderRadius: '16px',
+                      border: '2px dashed #E5E7EB',
+                      color: '#6B7280',
+                      fontSize: '14px'
+                    }}>
+                      <div style={{ fontSize: '48px', marginBottom: '12px' }}>🐈</div>
+                      {active.emptyCats}
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                      {selectedCat && (
+                        <div style={{
+                          padding: '20px',
+                          backgroundColor: '#FDFBF7',
+                          borderRadius: '16px',
+                          border: `2.5px solid ${COLORS.bgLight}`,
+                          position: 'relative'
+                        }}>
+                          <h3 style={{ margin: '0 0 10px 0', fontSize: '20px', color: COLORS.secondary, fontFamily: '"Lilita One", sans-serif' }}>
+                            {selectedCat.name}
+                          </h3>
+                          <div style={{ display: 'flex', gap: '20px', fontSize: '14px', color: '#4B5563', fontWeight: '500' }}>
+                            <span>{active.catAgeLabel.replace('{age}', selectedCat.age || '0')}</span>
+                            <span>•</span>
+                            <span>{active.catWeightLabel.replace('{weight}', selectedCat.weight || '0')}</span>
+                          </div>
+                        </div>
+                      )}
+
+                      <div 
+                        style={{ 
+                          maxHeight: isDesktop ? '280px' : '220px', 
+                          overflowY: 'auto', 
+                          display: 'flex', 
+                          flexDirection: 'column', 
+                          gap: '10px',
+                          paddingRight: '4px'
+                        }}
+                      >
+                        {cats.map((c) => (
+                          <div
+                            key={c.id}
+                            onClick={() => setSelectedCatId(c.id)}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              padding: '12px 16px',
+                              borderRadius: '12px',
+                              border: selectedCatId === c.id ? `2px solid ${COLORS.primary}` : '1.5px solid #E5E7EB',
+                              backgroundColor: selectedCatId === c.id ? '#FFFBF7' : '#FFFFFF',
+                              cursor: 'pointer',
+                              transition: 'all 0.2s ease'
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                              <div style={{
+                                width: '16px',
+                                height: '16px',
+                                borderRadius: '50%',
+                                backgroundColor: CAT_COLORS[c.color]?.body || '#E8943A',
+                                boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.15)'
+                              }} />
+                              <span style={{ fontWeight: '600', fontSize: '15px', color: '#1E1F22' }}>
+                                {c.name}
+                              </span>
+                            </div>
+
+                            <button
+                              onClick={(e) => handleDeleteCat(c.id, e)}
+                              style={{
+                                padding: '4px 10px',
+                                backgroundColor: 'transparent',
+                                border: '1.5px solid #F3F4F6',
+                                color: '#EF4444',
+                                borderRadius: '6px',
+                                fontSize: '11px',
+                                fontWeight: 'bold',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s'
+                              }}
+                              onMouseOver={(e) => {
+                                e.currentTarget.style.backgroundColor = '#FEF2F2';
+                                e.currentTarget.style.borderColor = '#FCA5A5';
+                              }}
+                              onMouseOut={(e) => {
+                                e.currentTarget.style.backgroundColor = 'transparent';
+                                e.currentTarget.style.borderColor = '#F3F4F6';
+                              }}
+                            >
+                              {active.deleteCat}
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
-          )}
+          </div>
         </Show>
       </div>
     </div>

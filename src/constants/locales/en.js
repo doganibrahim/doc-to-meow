@@ -11,5 +11,13 @@ export const en = {
   avatarColor: "Select Avatar Color",
   saveBtn: "Save Cat Info",
   successMsg: "Hooray! {name} has been added!",
-  addAnother: "Add Another Cat"
+  addAnother: "Add Another Cat",
+  dashboardTitle: "My Cats",
+  emptyCats: "No cats yet! Add your first kitty.",
+  addNewCat: "+ Add New Cat",
+  backToDashboard: "Back to Dashboard",
+  catAgeLabel: "Age: {age} years",
+  catWeightLabel: "Weight: {weight} kg",
+  selectCatPrompt: "Select a kitty to see their 3D avatar!",
+  deleteCat: "Remove"
 };

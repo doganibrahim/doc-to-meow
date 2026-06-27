@@ -18,12 +18,12 @@ I'm a huge believer in the power of compound growth—small, consistent daily ac
 
 ## My 12-Day Sprint Plan
 
-### Day 1: Laying the Foundation & Catching the Vibe
+### Day 1: Laying the Foundation & Catching the Vibe - DONE!!!
 * Set up the React (Vite) and Node.js repositories.
 * Configure Tailwind CSS with the exact color palette.
 * Get Kiro ready for the workflow. Today is all about setting up the environment and establishing the visual vibe of the app.
 
-### Day 2: Authentication & Welcoming the Cats
+### Day 2: Authentication & Welcoming the Cats - DONE!!!
 * Build the user registration and login flow.
 * Create the "Add Pet" interface. I want this to be super cute—users will enter their cat's name, age, weight, and pick a little avatar.
 * Design the main "My Cats" dashboard.
