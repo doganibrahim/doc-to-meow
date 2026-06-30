@@ -13,41 +13,59 @@ export default function PetDetail({
   const [date, setDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [notes, setNotes] = useState('');
   const [file, setFile] = useState(null);
-  
+
   // Track which report is being previewed
   const [previewingReportId, setPreviewingReportId] = useState(null);
+  const [isUploading, setIsUploading] = useState(false);
 
-  const handleSaveReport = (e) => {
+  const handleSaveReport = async (e) => {
     e.preventDefault();
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onloadend = () => {
+    setIsUploading(true);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      // Upload file to Express backend
+      const response = await fetch('http://localhost:3000/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Upload failed');
+      }
+
+      const uploadData = await response.json();
+
       const report = {
         id: Date.now().toString(),
-        title: title.trim() || file.name,
+        title: title.trim() || uploadData.fileName || file.name,
         date: date || new Date().toISOString().split('T')[0],
         notes: notes.trim(),
-        fileName: file.name,
-        fileType: file.type,
-        fileSize: file.size,
-        fileData: reader.result, // base64 string
+        fileName: uploadData.fileName || file.name,
+        fileType: uploadData.fileType || file.type,
+        fileSize: uploadData.fileSize || file.size,
+        fileData: uploadData.fileUrl, // Store the public URL from Supabase Storage
         uploadedAt: new Date().toISOString()
       };
 
-      try {
-        onAddReport(cat.id, report);
-        
-        // Reset form
-        setTitle('');
-        setDate(new Date().toISOString().split('T')[0]);
-        setNotes('');
-        setFile(null);
-      } catch {
-        alert("Failed to save report. Local storage might be full.");
-      }
-    };
-    reader.readAsDataURL(file);
+      onAddReport(cat.id, report);
+
+      // Reset form
+      setTitle('');
+      setDate(new Date().toISOString().split('T')[0]);
+      setNotes('');
+      setFile(null);
+    } catch (err) {
+      console.error(err);
+      alert("Failed to upload/save report: " + err.message);
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   const reports = cat.reports || [];
@@ -70,15 +88,19 @@ export default function PetDetail({
     }
   };
 
-  const handleOpenPdf = (base64Data, fileName) => {
-    const newWindow = window.open();
-    if (newWindow) {
-      newWindow.document.write(
-        `<iframe src="${base64Data}" frameborder="0" style="border:0; top:0px; left:0px; bottom:0px; right:0px; width:100%; height:100%;" allowfullscreen></iframe>`
-      );
-      newWindow.document.title = fileName;
+  const handleOpenPdf = (fileUrl, fileName) => {
+    if (fileUrl.startsWith('data:')) {
+      const newWindow = window.open();
+      if (newWindow) {
+        newWindow.document.write(
+          `<iframe src="${fileUrl}" frameborder="0" style="border:0; top:0px; left:0px; bottom:0px; right:0px; width:100%; height:100%;" allowfullscreen></iframe>`
+        );
+        newWindow.document.title = fileName;
+      } else {
+        alert("Popup blocked! Please allow popups to view files.");
+      }
     } else {
-      alert("Popup blocked! Please allow popups to view files.");
+      window.open(fileUrl, '_blank');
     }
   };
 
@@ -145,7 +167,7 @@ export default function PetDetail({
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '30px' }}>
-        
+
         {/* VET REPORTS LIST SECTION */}
         <div>
           <h3 style={{
@@ -383,7 +405,7 @@ export default function PetDetail({
           </h3>
 
           <form onSubmit={handleSaveReport} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            
+
             {/* Dropzone field */}
             <div>
               <DragDropUpload
@@ -476,30 +498,30 @@ export default function PetDetail({
             <div style={{ display: 'flex', gap: '12px', marginTop: '4px' }}>
               <button
                 type="submit"
-                disabled={!file}
+                disabled={!file || isUploading}
                 style={{
                   flex: 1,
                   padding: '12px',
-                  backgroundColor: file ? COLORS.primary : '#E5E7EB',
-                  color: file ? '#FFFFFF' : '#9CA3AF',
+                  backgroundColor: (file && !isUploading) ? COLORS.primary : '#E5E7EB',
+                  color: (file && !isUploading) ? '#FFFFFF' : '#9CA3AF',
                   border: 'none',
                   borderRadius: '10px',
                   fontWeight: '700',
                   fontSize: '14px',
-                  cursor: file ? 'pointer' : 'not-allowed',
+                  cursor: (file && !isUploading) ? 'pointer' : 'not-allowed',
                   transition: 'background-color 0.2s',
-                  boxShadow: file ? `0 3px 10px rgba(252, 163, 77, 0.2)` : 'none'
+                  boxShadow: (file && !isUploading) ? `0 3px 10px rgba(252, 163, 77, 0.2)` : 'none'
                 }}
                 onMouseOver={(e) => {
-                  if (file) e.currentTarget.style.backgroundColor = COLORS.primaryDark;
+                  if (file && !isUploading) e.currentTarget.style.backgroundColor = COLORS.primaryDark;
                 }}
                 onMouseOut={(e) => {
-                  if (file) e.currentTarget.style.backgroundColor = COLORS.primary;
+                  if (file && !isUploading) e.currentTarget.style.backgroundColor = COLORS.primary;
                 }}
               >
-                {activeLocale.saveReportBtn}
+                {isUploading ? activeLocale.uploading : activeLocale.saveReportBtn}
               </button>
-              
+
               <button
                 type="button"
                 onClick={() => {

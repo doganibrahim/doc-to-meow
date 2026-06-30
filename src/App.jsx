@@ -111,15 +111,34 @@ function App() {
     }));
   };
 
-  const handleDeleteReport = (catId, reportId) => {
-    setCats(prevCats => prevCats.map(cat => {
-      if (cat.id === catId) {
+  const handleDeleteReport = async (catId, reportId) => {
+    // Find the cat and report to get the file url
+    const cat = cats.find(c => c.id === catId);
+    if (cat) {
+      const report = (cat.reports || []).find(r => r.id === reportId);
+      if (report && report.fileData && report.fileData.startsWith('http')) {
+        try {
+          await fetch('http://localhost:3000/api/upload', {
+            method: 'DELETE',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ fileUrl: report.fileData })
+          });
+        } catch (err) {
+          console.error('Failed to delete file from cloud storage:', err);
+        }
+      }
+    }
+
+    setCats(prevCats => prevCats.map(c => {
+      if (c.id === catId) {
         return {
-          ...cat,
-          reports: (cat.reports || []).filter(r => r.id !== reportId)
+          ...c,
+          reports: (c.reports || []).filter(r => r.id !== reportId)
         };
       }
-      return cat;
+      return c;
     }));
   };
 

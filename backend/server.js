@@ -87,6 +87,38 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
   }
 });
 
+// File Delete Endpoint
+app.delete('/api/upload', async (req, res) => {
+  try {
+    const { fileUrl } = req.body;
+    if (!fileUrl) {
+      return res.status(400).json({ error: 'No fileUrl provided.' });
+    }
+
+    // Parse the filename from the public URL
+    const parts = fileUrl.split('/reports/');
+    if (parts.length < 2) {
+      return res.status(400).json({ error: 'Invalid fileUrl format.' });
+    }
+    const fileName = parts[1];
+    const filePath = `reports/${fileName}`;
+
+    const { data, error } = await supabase.storage
+      .from('vet-reports')
+      .remove([filePath]);
+
+    if (error) {
+      console.error('Supabase delete error:', error);
+      throw error;
+    }
+
+    res.status(200).json({ message: 'File deleted successfully!', data });
+  } catch (error) {
+    console.error('Server delete handler error:', error);
+    res.status(500).json({ error: error.message || 'Internal Server Error' });
+  }
+});
+
 // Start the Server
 app.listen(port, () => {
   console.log(`Backend server is running on http://localhost:${port}`);
