@@ -142,6 +142,23 @@ function App() {
     }));
   };
 
+  const handleUpdateReport = (catId, reportId, updatedFields) => {
+    setCats(prevCats => prevCats.map(cat => {
+      if (cat.id === catId) {
+        return {
+          ...cat,
+          reports: (cat.reports || []).map(r => {
+            if (r.id === reportId) {
+              return { ...r, ...updatedFields };
+            }
+            return r;
+          })
+        };
+      }
+      return cat;
+    }));
+  };
+
   return (
     <div
       style={{
@@ -500,6 +517,7 @@ function App() {
                   activeLocale={active}
                   onAddReport={handleAddReport}
                   onDeleteReport={handleDeleteReport}
+                  onUpdateReport={handleUpdateReport}
                   onBack={() => setViewMode('dashboard')}
                 />
               )}

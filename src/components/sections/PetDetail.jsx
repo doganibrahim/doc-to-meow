@@ -7,6 +7,7 @@ export default function PetDetail({
   activeLocale,
   onAddReport,
   onDeleteReport,
+  onUpdateReport,
   onBack
 }) {
   const [title, setTitle] = useState('');
@@ -17,6 +18,8 @@ export default function PetDetail({
   // Track which report is being previewed
   const [previewingReportId, setPreviewingReportId] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [extractingReportId, setExtractingReportId] = useState(null);
+  const [viewingExtractedText, setViewingExtractedText] = useState(null);
 
   const handleSaveReport = async (e) => {
     e.preventDefault();
@@ -65,6 +68,47 @@ export default function PetDetail({
       alert("Failed to upload/save report: " + err.message);
     } finally {
       setIsUploading(false);
+    }
+  };
+
+  const handleExtractText = async (report) => {
+    // If the text is already extracted and stored, just show it
+    if (report.extractedText) {
+      setViewingExtractedText({ title: report.title, text: report.extractedText });
+      return;
+    }
+
+    setExtractingReportId(report.id);
+    setViewingExtractedText({ title: report.title, text: 'loading' });
+
+    try {
+      const response = await fetch('http://localhost:3000/api/extract', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          fileUrl: report.fileData,
+          fileType: report.fileType
+        })
+      });
+
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || 'Failed to extract text from document.');
+      }
+
+      const data = await response.json();
+
+      // Save it to state and localStorage so we don't have to extract again
+      onUpdateReport(cat.id, report.id, { extractedText: data.extractedText });
+
+      setViewingExtractedText({ title: report.title, text: data.extractedText });
+    } catch (err) {
+      console.error(err);
+      setViewingExtractedText({ title: report.title, text: `⚠️ Error extracting text: ${err.message}` });
+    } finally {
+      setExtractingReportId(null);
     }
   };
 
@@ -326,6 +370,30 @@ export default function PetDetail({
                         </button>
                       )}
 
+                      {/* Extract Text Button */}
+                      <button
+                        type="button"
+                        onClick={() => handleExtractText(report)}
+                        style={{
+                          padding: '4px 10px',
+                          backgroundColor: '#FFF7ED',
+                          color: COLORS.secondary,
+                          border: 'none',
+                          borderRadius: '6px',
+                          fontSize: '11px',
+                          fontWeight: '700',
+                          cursor: 'pointer',
+                          transition: 'background-color 0.2s',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px'
+                        }}
+                        onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#FFEDD5'}
+                        onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#FFF7ED'}
+                      >
+                        {extractingReportId === report.id ? '⌛ Extracting...' : '🔍 Extract Text'}
+                      </button>
+
                       {/* Download Link */}
                       <a
                         href={report.fileData}
@@ -558,6 +626,156 @@ export default function PetDetail({
         </div>
 
       </div>
+
+      {/* Inject style for spinner */}
+      <style>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
+
+      {/* Extracted Text Viewer Modal */}
+      {viewingExtractedText && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(30, 31, 34, 0.6)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999,
+          padding: '20px'
+        }}>
+          <div style={{
+            backgroundColor: '#FFFFFF',
+            borderRadius: '24px',
+            maxWidth: '600px',
+            width: '100%',
+            maxHeight: '80vh',
+            display: 'flex',
+            flexDirection: 'column',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+            border: `2px solid ${COLORS.bgLight}`,
+            animation: 'fadeIn 0.2s ease'
+          }}>
+            {/* Modal Header */}
+            <div style={{
+              padding: '20px 24px',
+              borderBottom: '1px solid #F3F4F6',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+            }}>
+              <h3 style={{
+                margin: 0,
+                fontSize: '18px',
+                fontFamily: '"Lilita One", sans-serif',
+                color: COLORS.primary
+              }}>
+                📄 {viewingExtractedText.title}
+              </h3>
+              <button
+                onClick={() => setViewingExtractedText(null)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '20px',
+                  cursor: 'pointer',
+                  color: '#9CA3AF',
+                  transition: 'color 0.2s'
+                }}
+                onMouseOver={(e) => e.target.style.color = '#EF4444'}
+                onMouseOut={(e) => e.target.style.color = '#9CA3AF'}
+              >
+                ✖
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div style={{
+              padding: '24px',
+              overflowY: 'auto',
+              flex: 1,
+              backgroundColor: '#FAFAFA'
+            }}>
+              {viewingExtractedText.text === 'loading' ? (
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '40px 0',
+                  gap: '16px'
+                }}>
+                  <div style={{
+                    width: '40px',
+                    height: '40px',
+                    border: `4px solid ${COLORS.bgLight}`,
+                    borderTop: `4px solid ${COLORS.primary}`,
+                    borderRadius: '50%',
+                    animation: 'spin 1s linear infinite'
+                  }} />
+                  <p style={{
+                    margin: 0,
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    color: '#6B7280',
+                    textAlign: 'center'
+                  }}>
+                    Agent Pepper is scanning and extracting data... 🐾
+                  </p>
+                </div>
+              ) : (
+                <div style={{
+                  whiteSpace: 'pre-wrap',
+                  fontFamily: 'monospace',
+                  fontSize: '13px',
+                  color: '#374151',
+                  lineHeight: '1.6',
+                  backgroundColor: '#FFFFFF',
+                  padding: '16px',
+                  borderRadius: '12px',
+                  border: '1.5px solid #E5E7EB'
+                }}>
+                  {viewingExtractedText.text}
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div style={{
+              padding: '16px 24px',
+              borderTop: '1px solid #F3F4F6',
+              display: 'flex',
+              justifyContent: 'flex-end'
+            }}>
+              <button
+                onClick={() => setViewingExtractedText(null)}
+                style={{
+                  padding: '8px 20px',
+                  backgroundColor: COLORS.primary,
+                  color: '#FFFFFF',
+                  border: 'none',
+                  borderRadius: '10px',
+                  fontWeight: '700',
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                  transition: 'background-color 0.2s'
+                }}
+                onMouseOver={(e) => e.target.style.backgroundColor = COLORS.primaryDark}
+                onMouseOut={(e) => e.target.style.backgroundColor = COLORS.primary}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
