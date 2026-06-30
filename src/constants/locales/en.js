@@ -19,5 +19,20 @@ export const en = {
   catAgeLabel: "Age: {age} years",
   catWeightLabel: "Weight: {weight} kg",
   selectCatPrompt: "Select a kitty to see their 3D avatar!",
-  deleteCat: "Remove"
+  deleteCat: "Remove",
+  viewDetails: "View Reports & Care Plan 🐾",
+  vetReports: "Vet Reports",
+  noReports: "No mrow reports uploaded yet. Upload one below to start!",
+  addNewReport: "Add New Vet Report",
+  reportTitle: "Report Title / Reason for Visit",
+  visitDate: "Date of Visit",
+  parentNotes: "Your Notes",
+  dropzonePrompt: "Drag and drop your vet report here, or click to browse",
+  dropzoneFormats: "Supports PDF, PNG, JPG, or JPEG (Max 10MB)",
+  saveReportBtn: "Save Report",
+  cancelBtn: "Cancel",
+  invalidFormat: "Unsupported file format. Please upload a PDF or an image (PNG, JPG, JPEG).",
+  fileTooLarge: "File is too large. Maximum size is 10MB.",
+  uploadedAtLabel: "Uploaded on {date}",
+  visitDateLabel: "Visit date: {date}"
 };

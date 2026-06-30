@@ -10,6 +10,7 @@ import { COLORS } from './constants/theme';
 import { en } from './constants/locales/en';
 import { cat } from './constants/locales/cat';
 import CatAvatar3D, { CAT_COLORS } from './components/ui/CatAvatar3D';
+import PetDetail from './components/sections/PetDetail';
 
 
 function App() {
@@ -30,19 +31,19 @@ function App() {
     try {
       const saved = localStorage.getItem('doc_to_meow_cats');
       return saved ? JSON.parse(saved) : [];
-    } catch (e) {
+    } catch {
       return [];
     }
   });
 
   // Navigation / Selected States
-  const [viewMode, setViewMode] = useState('dashboard'); // 'dashboard' | 'add'
+  const [viewMode, setViewMode] = useState('dashboard'); // 'dashboard' | 'add' | 'detail'
   const [selectedCatId, setSelectedCatId] = useState(() => {
     try {
       const saved = localStorage.getItem('doc_to_meow_cats');
       const parsed = saved ? JSON.parse(saved) : [];
       return parsed.length > 0 ? parsed[0].id : null;
-    } catch (e) {
+    } catch {
       return null;
     }
   });
@@ -96,6 +97,30 @@ function App() {
       }
       return updated;
     });
+  };
+
+  const handleAddReport = (catId, report) => {
+    setCats(prevCats => prevCats.map(cat => {
+      if (cat.id === catId) {
+        return {
+          ...cat,
+          reports: [...(cat.reports || []), report]
+        };
+      }
+      return cat;
+    }));
+  };
+
+  const handleDeleteReport = (catId, reportId) => {
+    setCats(prevCats => prevCats.map(cat => {
+      if (cat.id === catId) {
+        return {
+          ...cat,
+          reports: (cat.reports || []).filter(r => r.id !== reportId)
+        };
+      }
+      return cat;
+    }));
   };
 
   return (
@@ -269,7 +294,7 @@ function App() {
                 </div>
               )}
 
-              {viewMode === 'dashboard' && selectedCat && (
+              {(viewMode === 'dashboard' || viewMode === 'detail') && selectedCat && (
                 <div style={{
                   padding: '10px 20px',
                   borderRadius: '12px',
@@ -286,7 +311,7 @@ function App() {
 
             {/* Right Column: Dynamic Content Panel */}
             <div style={{ flex: 1, width: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-              {viewMode === 'add' ? (
+              {viewMode === 'add' && (
                 /* ADD MODE FORM */
                 <form onSubmit={handleSubmit} style={{ textAlign: 'left', width: '100%' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
@@ -448,7 +473,19 @@ function App() {
                     {active.saveBtn}
                   </button>
                 </form>
-              ) : (
+              )}
+
+              {viewMode === 'detail' && selectedCat && (
+                <PetDetail
+                  cat={selectedCat}
+                  activeLocale={active}
+                  onAddReport={handleAddReport}
+                  onDeleteReport={handleDeleteReport}
+                  onBack={() => setViewMode('dashboard')}
+                />
+              )}
+
+              {viewMode === 'dashboard' && (
                 /* DASHBOARD VIEW MODE */
                 <div style={{ textAlign: 'left', width: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
@@ -514,6 +551,33 @@ function App() {
                             <span>•</span>
                             <span>{active.catWeightLabel.replace('{weight}', selectedCat.weight || '0')}</span>
                           </div>
+
+                          <button
+                            onClick={() => setViewMode('detail')}
+                            style={{
+                              marginTop: '15px',
+                              width: '100%',
+                              padding: '10px 14px',
+                              backgroundColor: COLORS.primary,
+                              color: '#FFFFFF',
+                              border: 'none',
+                              borderRadius: '10px',
+                              fontWeight: 'bold',
+                              cursor: 'pointer',
+                              fontSize: '13px',
+                              transition: 'background-color 0.2s',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '6px',
+                              outline: 'none',
+                              boxShadow: `0 2px 8px rgba(252, 163, 77, 0.2)`
+                            }}
+                            onMouseOver={(e) => e.currentTarget.style.backgroundColor = COLORS.primaryDark}
+                            onMouseOut={(e) => e.currentTarget.style.backgroundColor = COLORS.primary}
+                          >
+                            {active.viewDetails}
+                          </button>
                         </div>
                       )}
 

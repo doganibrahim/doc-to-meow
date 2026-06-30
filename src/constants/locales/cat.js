@@ -19,5 +19,20 @@ export const cat = {
   catAgeLabel: "Purrs: {age} years",
   catWeightLabel: "Cat-power: {weight} kg",
   selectCatPrompt: "Mew a kitty to purr their 3D avatar!",
-  deleteCat: "Hiss"
+  deleteCat: "Hiss",
+  viewDetails: "Purr Reports & Care Plan 🐾",
+  vetReports: "Mrow Reports",
+  noReports: "No mrow reports uploaded yet. Scratch one below to start!",
+  addNewReport: "Mew New Mrow Report",
+  reportTitle: "Mrow Title / Reason for Purr",
+  visitDate: "Date of Purr-Visit",
+  parentNotes: "Your Scratch-Notes",
+  dropzonePrompt: "Drag and drop your mrow report here, or scratch to browse",
+  dropzoneFormats: "Supports PDF, PNG, JPG (Max 10MB for meow-power)",
+  saveReportBtn: "Meow Save Report",
+  cancelBtn: "Hiss Cancel",
+  invalidFormat: "Hiss! Unsupported file format. Scratch a PDF or an image (PNG, JPG, JPEG).",
+  fileTooLarge: "Hiss! File is too large. Max is 10MB for cat-muscles.",
+  uploadedAtLabel: "Purred on {date}",
+  visitDateLabel: "Purr-visit date: {date}"
 };
