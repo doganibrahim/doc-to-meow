@@ -37,5 +37,11 @@ export const cat = {
   visitDateLabel: "Purr-visit date: {date}",
   translateBtn: "Purr-slate Report 🐾",
   translating: "Purr-slating...",
-  translationTitle: "Purr-slated Mrows & Insights"
+  translationTitle: "Purr-slated Mrows & Insights",
+  careTrackerTitle: "{name} Daily Tracker 🐾",
+  dailyHabits: "Daily Mrows & Habits",
+  oneOffTodos: "One-off Scratches & To-Dos",
+  noHabits: "No mrow habits.",
+  noTodos: "No mrow to-dos.",
+  startTrackingBtn: "Mew Start Tracking Care Plan 🐾"
 };

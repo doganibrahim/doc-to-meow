@@ -37,5 +37,11 @@ export const en = {
   visitDateLabel: "Visit date: {date}",
   translateBtn: "Translate Report 🐾",
   translating: "Translating...",
-  translationTitle: "Empathetic Summary & Insights"
+  translationTitle: "Empathetic Summary & Insights",
+  careTrackerTitle: "{name}'s Care Tracker 🐾",
+  dailyHabits: "Daily Habits",
+  oneOffTodos: "One-off To-Dos",
+  noHabits: "No active habits.",
+  noTodos: "No active to-dos.",
+  startTrackingBtn: "Start Tracking Care Plan 🐾"
 };

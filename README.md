@@ -40,7 +40,7 @@ I'm a huge believer in the power of compound growth—small, consistent daily ac
 * Build **Agent 2: The Medical Translator**.
 * I'll use In-Context Learning (providing pre-processed vet reports as a guide) to prompt engineer this agent to take the raw, scary medical jargon from Agent 1 and translate it into warm, reassuring, and easy-to-understand language.
 
-### Day 6: The Habit Architect Agent
+### Day 6: The Habit Architect Agent - DONE!!!
 * Build **Agent 3: The Habit Architect**. This is where the magic happens!
 * This agent will analyze the translated report and break it down into an actionable JSON format. It will separate tasks into **To-Dos** (e.g., "Buy renal cat food") and **Habits** (e.g., "Give 5ml of syrup every morning").
 

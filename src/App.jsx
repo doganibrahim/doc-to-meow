@@ -74,7 +74,10 @@ function App() {
       name: catName,
       age: catAge,
       weight: catWeight,
-      color: avatarColor
+      color: avatarColor,
+      reports: [],
+      activeHabits: [],
+      activeTodos: []
     };
 
     setCats(prev => [...prev, newCat]);
@@ -156,6 +159,156 @@ function App() {
         };
       }
       return cat;
+    }));
+  };
+
+  const handleCommitCarePlan = (habits, todos) => {
+    if (!selectedCatId) return;
+    
+    setCats(prevCats => prevCats.map(c => {
+      if (c.id === selectedCatId) {
+        // Build active habits
+        const newHabits = habits.map(h => ({
+          id: `${h.title}-${Date.now()}-${Math.random()}`,
+          title: h.title,
+          frequency: h.frequency || 'Daily',
+          description: h.description,
+          completions: {},
+          streak: 0
+        }));
+        
+        // Build active todos
+        const newTodos = todos.map(t => ({
+          id: `${t.title}-${Date.now()}-${Math.random()}`,
+          title: t.title,
+          description: t.description,
+          completed: false,
+          completedAt: null
+        }));
+
+        const existingHabits = c.activeHabits || [];
+        const existingTodos = c.activeTodos || [];
+
+        // Check for duplicates to avoid adding the same habit/todo twice
+        const filteredNewHabits = newHabits.filter(nh => !existingHabits.some(eh => eh.title === nh.title));
+        const filteredNewTodos = newTodos.filter(nt => !existingTodos.some(et => et.title === nt.title));
+
+        return {
+          ...c,
+          activeHabits: [...existingHabits, ...filteredNewHabits],
+          activeTodos: [...existingTodos, ...filteredNewTodos]
+        };
+      }
+      return c;
+    }));
+  };
+
+  const handleToggleHabit = (habitId, dateStr) => {
+    if (!selectedCatId) return;
+
+    setCats(prevCats => prevCats.map(c => {
+      if (c.id === selectedCatId) {
+        const updatedHabits = (c.activeHabits || []).map(h => {
+          if (h.id === habitId) {
+            const completions = { ...(h.completions || {}) };
+            const isCompleted = !!completions[dateStr];
+            
+            if (isCompleted) {
+              delete completions[dateStr];
+            } else {
+              completions[dateStr] = true;
+            }
+
+            // Calculate streak based on completions
+            let currentStreak = 0;
+            let checkDate = new Date();
+            
+            while (true) {
+              const formattedCheckDate = checkDate.toISOString().split('T')[0];
+              if (completions[formattedCheckDate]) {
+                currentStreak++;
+                checkDate.setDate(checkDate.getDate() - 1);
+              } else {
+                const todayStr = new Date().toISOString().split('T')[0];
+                if (formattedCheckDate === todayStr) {
+                  checkDate.setDate(checkDate.getDate() - 1);
+                  const formattedYesterday = checkDate.toISOString().split('T')[0];
+                  if (completions[formattedYesterday]) {
+                    continue;
+                  }
+                }
+                break;
+              }
+            }
+
+            return {
+              ...h,
+              completions,
+              streak: currentStreak
+            };
+          }
+          return h;
+        });
+
+        return {
+          ...c,
+          activeHabits: updatedHabits
+        };
+      }
+      return c;
+    }));
+  };
+
+  const handleToggleTodo = (todoId) => {
+    if (!selectedCatId) return;
+
+    setCats(prevCats => prevCats.map(c => {
+      if (c.id === selectedCatId) {
+        const updatedTodos = (c.activeTodos || []).map(t => {
+          if (t.id === todoId) {
+            return {
+              ...t,
+              completed: !t.completed,
+              completedAt: !t.completed ? new Date().toISOString() : null
+            };
+          }
+          return t;
+        });
+
+        return {
+          ...c,
+          activeTodos: updatedTodos
+        };
+      }
+      return c;
+    }));
+  };
+
+  const handleDeleteHabit = (habitId) => {
+    if (!selectedCatId) return;
+
+    setCats(prevCats => prevCats.map(c => {
+      if (c.id === selectedCatId) {
+        return {
+          ...c,
+          activeHabits: (c.activeHabits || []).filter(h => h.id !== habitId)
+        };
+      }
+      return c;
+    }));
+  };
+
+  const handleDeleteTodo = (todoId) => {
+    if (!selectedCatId) return;
+
+    setCats(prevCats => prevCats.map(c => {
+      if (c.id === selectedCatId) {
+        return {
+          ...c,
+          activeTodos: (c.activeTodos || []).filter(t => t.id !== todoId)
+        };
+      }
+      return c;
     }));
   };
 
@@ -292,7 +445,7 @@ function App() {
               display: 'flex',
               flexDirection: isDesktop ? 'row' : 'column',
               gap: '40px',
-              alignItems: 'stretch',
+              alignItems: 'flex-start',
               justifyContent: 'center',
               marginTop: '15px'
             }}
@@ -348,7 +501,7 @@ function App() {
             )}
 
             {/* Right Column: Dynamic Content Panel */}
-            <div style={{ flex: 1, width: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+            <div style={{ flex: 1, width: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
               {viewMode === 'add' && (
                 /* ADD MODE FORM */
                 <form onSubmit={handleSubmit} style={{ textAlign: 'left', width: '100%' }}>
@@ -522,12 +675,13 @@ function App() {
                   onUpdateReport={handleUpdateReport}
                   onBack={() => setViewMode('dashboard')}
                   isDesktop={isDesktop}
+                  onCommitCarePlan={handleCommitCarePlan}
                 />
               )}
 
               {viewMode === 'dashboard' && (
                 /* DASHBOARD VIEW MODE */
-                <div style={{ textAlign: 'left', width: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                <div style={{ textAlign: 'left', width: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                     <h2
                       style={{
@@ -618,6 +772,251 @@ function App() {
                           >
                             {active.viewDetails}
                           </button>
+                        </div>
+                      )}
+
+                      {/* Daily Care Tracker */}
+                      {selectedCat && ((selectedCat.activeHabits && selectedCat.activeHabits.length > 0) || (selectedCat.activeTodos && selectedCat.activeTodos.length > 0)) && (
+                        <div style={{
+                          padding: '20px',
+                          backgroundColor: '#FFFFFF',
+                          borderRadius: '16px',
+                          border: `2px solid ${COLORS.bgLight}`,
+                          boxShadow: '0 4px 12px rgba(253, 232, 209, 0.15)'
+                        }}>
+                          <h3 style={{
+                            fontFamily: '"Lilita One", sans-serif',
+                            fontSize: '20px',
+                            color: COLORS.primary,
+                            margin: '0 0 16px 0',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px'
+                          }}>
+                            {active.careTrackerTitle.replace('{name}', selectedCat.name)}
+                          </h3>
+
+                          {/* Habits Section */}
+                          {selectedCat.activeHabits && selectedCat.activeHabits.length > 0 && (
+                            <div style={{ marginBottom: '20px' }}>
+                              <h4 style={{
+                                fontFamily: '"Lilita One", sans-serif',
+                                fontSize: '15px',
+                                color: COLORS.secondary,
+                                margin: '0 0 10px 0'
+                              }}>
+                                {active.dailyHabits}
+                              </h4>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                {selectedCat.activeHabits.map((habit) => {
+                                  const todayStr = new Date().toISOString().split('T')[0];
+                                  const isCompletedToday = !!(habit.completions && habit.completions[todayStr]);
+                                  return (
+                                    <div
+                                      key={habit.id}
+                                      style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        padding: '10px 12px',
+                                        backgroundColor: isCompletedToday ? '#FFFBF7' : '#FAFAFA',
+                                        borderRadius: '10px',
+                                        border: isCompletedToday ? `1.5px solid ${COLORS.primary}` : '1.5px solid #F3F4F6',
+                                        transition: 'all 0.2s'
+                                      }}
+                                    >
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
+                                        <button
+                                          onClick={() => handleToggleHabit(habit.id, todayStr)}
+                                          style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            width: '22px',
+                                            height: '22px',
+                                            borderRadius: '50%',
+                                            backgroundColor: isCompletedToday ? COLORS.primary : '#FFFFFF',
+                                            border: `2.5px solid ${COLORS.primary}`,
+                                            cursor: 'pointer',
+                                            color: '#FFFFFF',
+                                            fontSize: '11px',
+                                            fontWeight: '900',
+                                            flexShrink: 0,
+                                            outline: 'none',
+                                            transition: 'all 0.15s ease'
+                                          }}
+                                        >
+                                          {isCompletedToday ? '✓' : ''}
+                                        </button>
+                                        <div style={{ minWidth: 0 }}>
+                                          <div style={{
+                                            fontWeight: '700',
+                                            fontSize: '13px',
+                                            color: isCompletedToday ? '#6B7280' : '#1E1F22',
+                                            textDecoration: isCompletedToday ? 'line-through' : 'none',
+                                            lineHeight: '1.4'
+                                          }}>
+                                            {habit.title}
+                                          </div>
+                                          <div style={{
+                                            fontSize: '10.5px',
+                                            color: '#9CA3AF',
+                                            marginTop: '2px',
+                                            lineHeight: '1.4'
+                                          }}>
+                                            {habit.description}
+                                          </div>
+                                        </div>
+                                      </div>
+
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0, marginLeft: '8px' }}>
+                                        <div style={{
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          gap: '2px',
+                                          fontSize: '11.5px',
+                                          fontWeight: '700',
+                                          color: habit.streak > 0 ? '#FE7E3D' : '#9CA3AF',
+                                          backgroundColor: habit.streak > 0 ? '#FFF7ED' : '#F3F4F6',
+                                          padding: '2px 6px',
+                                          borderRadius: '6px',
+                                          flexShrink: 0
+                                        }}>
+                                          🔥 {habit.streak || 0}
+                                        </div>
+                                        <button
+                                          onClick={() => handleDeleteHabit(habit.id)}
+                                          style={{
+                                            padding: '2px 6px',
+                                            backgroundColor: 'transparent',
+                                            border: '1px solid #F3F4F6',
+                                            color: '#EF4444',
+                                            borderRadius: '6px',
+                                            fontSize: '10px',
+                                            fontWeight: 'bold',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.2s'
+                                          }}
+                                          onMouseOver={(e) => {
+                                            e.currentTarget.style.backgroundColor = '#FEF2F2';
+                                            e.currentTarget.style.borderColor = '#FCA5A5';
+                                          }}
+                                          onMouseOut={(e) => {
+                                            e.currentTarget.style.backgroundColor = 'transparent';
+                                            e.currentTarget.style.borderColor = '#F3F4F6';
+                                          }}
+                                        >
+                                          {active.deleteCat}
+                                        </button>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* To-Dos Section */}
+                          {selectedCat.activeTodos && selectedCat.activeTodos.length > 0 && (
+                            <div>
+                              <h4 style={{
+                                fontFamily: '"Lilita One", sans-serif',
+                                fontSize: '15px',
+                                color: COLORS.secondary,
+                                margin: '0 0 10px 0'
+                              }}>
+                                {active.oneOffTodos}
+                              </h4>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                {selectedCat.activeTodos.map((todo) => (
+                                  <div
+                                    key={todo.id}
+                                    style={{
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      padding: '10px 12px',
+                                      backgroundColor: todo.completed ? '#FFFBF7' : '#FAFAFA',
+                                      borderRadius: '10px',
+                                      border: todo.completed ? `1.5px solid ${COLORS.primary}` : '1.5px solid #F3F4F6',
+                                      transition: 'all 0.2s'
+                                    }}
+                                  >
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
+                                      <button
+                                        onClick={() => handleToggleTodo(todo.id)}
+                                        style={{
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          justifyContent: 'center',
+                                          width: '22px',
+                                          height: '22px',
+                                          borderRadius: '4px',
+                                          backgroundColor: todo.completed ? COLORS.primary : '#FFFFFF',
+                                          border: `2.5px solid ${COLORS.primary}`,
+                                          cursor: 'pointer',
+                                          color: '#FFFFFF',
+                                          fontSize: '11px',
+                                          fontWeight: '900',
+                                          marginRight: '10px',
+                                          flexShrink: 0,
+                                          outline: 'none',
+                                          transition: 'all 0.15s ease'
+                                        }}
+                                      >
+                                        {todo.completed ? '✓' : ''}
+                                      </button>
+                                      <div style={{ minWidth: 0 }}>
+                                        <div style={{
+                                          fontWeight: '700',
+                                          fontSize: '13px',
+                                          color: todo.completed ? '#6B7280' : '#1E1F22',
+                                          textDecoration: todo.completed ? 'line-through' : 'none',
+                                          lineHeight: '1.4'
+                                        }}>
+                                          {todo.title}
+                                        </div>
+                                        <div style={{
+                                          fontSize: '10.5px',
+                                          color: '#9CA3AF',
+                                          marginTop: '2px',
+                                          lineHeight: '1.4'
+                                        }}>
+                                          {todo.description}
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    <button
+                                      onClick={() => handleDeleteTodo(todo.id)}
+                                      style={{
+                                        padding: '2px 6px',
+                                        backgroundColor: 'transparent',
+                                        border: '1px solid #F3F4F6',
+                                        color: '#EF4444',
+                                        borderRadius: '6px',
+                                        fontSize: '10px',
+                                        fontWeight: 'bold',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.2s',
+                                        flexShrink: 0,
+                                        marginLeft: '8px'
+                                      }}
+                                      onMouseOver={(e) => {
+                                        e.currentTarget.style.backgroundColor = '#FEF2F2';
+                                        e.currentTarget.style.borderColor = '#FCA5A5';
+                                      }}
+                                      onMouseOut={(e) => {
+                                        e.currentTarget.style.backgroundColor = 'transparent';
+                                        e.currentTarget.style.borderColor = '#F3F4F6';
+                                      }}
+                                    >
+                                      {active.deleteCat}
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
 

@@ -100,7 +100,8 @@ export default function PetDetail({
   onDeleteReport,
   onUpdateReport,
   onBack,
-  isDesktop
+  isDesktop,
+  onCommitCarePlan
 }) {
   const [title, setTitle] = useState('');
   const [date, setDate] = useState(() => new Date().toISOString().split('T')[0]);
@@ -114,6 +115,28 @@ export default function PetDetail({
   const [viewingExtractedText, setViewingExtractedText] = useState(null);
   const [translatingReportId, setTranslatingReportId] = useState(null);
   const [viewingTranslation, setViewingTranslation] = useState(null);
+
+  const [selectedHabits, setSelectedHabits] = useState({});
+  const [selectedTodos, setSelectedTodos] = useState({});
+
+  React.useEffect(() => {
+    if (viewingTranslation && viewingTranslation.carePlan) {
+      const habitsObj = {};
+      const todosObj = {};
+      const habitsList = viewingTranslation.carePlan.habits || [];
+      const todosList = viewingTranslation.carePlan.todos || [];
+      
+      habitsList.forEach((h, idx) => {
+        habitsObj[h.title || idx] = true;
+      });
+      todosList.forEach((t, idx) => {
+        todosObj[t.title || idx] = true;
+      });
+      
+      setSelectedHabits(habitsObj);
+      setSelectedTodos(todosObj);
+    }
+  }, [viewingTranslation]);
 
   const handleSaveReport = async (e) => {
     e.preventDefault();
@@ -207,9 +230,13 @@ export default function PetDetail({
   };
 
   const handleTranslateReport = async (report) => {
-    // If the translation is already generated, just show it
-    if (report.translatedText) {
-      setViewingTranslation({ title: report.title, text: report.translatedText });
+    // If the translation and care plan are already generated, just show them
+    if (report.translatedText && report.carePlan) {
+      setViewingTranslation({
+        title: report.title,
+        text: report.translatedText,
+        carePlan: report.carePlan
+      });
       return;
     }
 
@@ -244,28 +271,63 @@ export default function PetDetail({
         onUpdateReport(cat.id, report.id, { extractedText: currentExtractedText });
       }
 
-      // 2. Call the translate API
-      const translateResponse = await fetch('http://localhost:3000/api/translate', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          extractedText: currentExtractedText
-        })
-      });
+      // 2. Call the translate API (if not already translated)
+      let currentTranslatedText = report.translatedText;
+      if (!currentTranslatedText) {
+        const translateResponse = await fetch('http://localhost:3000/api/translate', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            extractedText: currentExtractedText
+          })
+        });
 
-      if (!translateResponse.ok) {
-        const errData = await translateResponse.json();
-        throw new Error(errData.error || 'Failed to translate report.');
+        if (!translateResponse.ok) {
+          const errData = await translateResponse.json();
+          throw new Error(errData.error || 'Failed to translate report.');
+        }
+
+        const translateData = await translateResponse.json();
+        currentTranslatedText = translateData.translatedText;
+        
+        // Save the translation
+        onUpdateReport(cat.id, report.id, { translatedText: currentTranslatedText });
       }
 
-      const translateData = await translateResponse.json();
-      const currentTranslatedText = translateData.translatedText;
+      // 3. Call the architect API (if care plan is not generated)
+      let currentCarePlan = report.carePlan;
+      if (!currentCarePlan) {
+        const architectResponse = await fetch('http://localhost:3000/api/architect', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            translatedText: currentTranslatedText
+          })
+        });
 
-      // 3. Save the translation to the report
-      onUpdateReport(cat.id, report.id, { translatedText: currentTranslatedText });
-      setViewingTranslation({ title: report.title, text: currentTranslatedText });
+        if (!architectResponse.ok) {
+          const errData = await architectResponse.json();
+          throw new Error(errData.error || 'Failed to generate care plan.');
+        }
+
+        currentCarePlan = await architectResponse.json();
+        
+        // Save the care plan to the report
+        onUpdateReport(cat.id, report.id, {
+          translatedText: currentTranslatedText,
+          carePlan: currentCarePlan
+        });
+      }
+
+      setViewingTranslation({
+        title: report.title,
+        text: currentTranslatedText,
+        carePlan: currentCarePlan
+      });
 
     } catch (err) {
       console.error(err);
@@ -1019,7 +1081,7 @@ export default function PetDetail({
           <div style={{
             backgroundColor: '#FFFFFF',
             borderRadius: '24px',
-            maxWidth: '650px',
+            maxWidth: '850px',
             width: '100%',
             maxHeight: '80vh',
             display: 'flex',
@@ -1099,17 +1161,169 @@ export default function PetDetail({
                   </p>
                 </div>
               ) : (
-                <div style={{
-                  fontSize: '14px',
-                  color: '#374151',
-                  backgroundColor: '#FFFFFF',
-                  padding: '20px',
-                  borderRadius: '16px',
-                  border: `1.5px solid ${COLORS.bgLight}`,
-                  boxShadow: '0 4px 12px rgba(253, 232, 209, 0.2)'
-                }}>
-                  {renderMarkdown(viewingTranslation.text)}
-                </div>
+                <>
+                  <div style={{
+                    fontSize: '14px',
+                    color: '#374151',
+                    backgroundColor: '#FFFFFF',
+                    padding: '20px',
+                    borderRadius: '16px',
+                    border: `1.5px solid ${COLORS.bgLight}`,
+                    boxShadow: '0 4px 12px rgba(253, 232, 209, 0.2)'
+                  }}>
+                    {renderMarkdown(viewingTranslation.text)}
+                  </div>
+
+                  {/* Care Plan Section */}
+                  {viewingTranslation.carePlan && (
+                    <div style={{ marginTop: '24px' }}>
+                      {/* Divider with Paw Print */}
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '12px',
+                        margin: '24px 0'
+                      }}>
+                        <div style={{ flex: 1, height: '1.5px', backgroundColor: COLORS.bgLight }} />
+                        <span style={{ fontSize: '18px', color: COLORS.primary, fontFamily: '"Lilita One", sans-serif' }}>🐾 Care Plan 🐾</span>
+                        <div style={{ flex: 1, height: '1.5px', backgroundColor: COLORS.bgLight }} />
+                      </div>
+
+                      <div style={{
+                        display: 'flex',
+                        flexDirection: isDesktop ? 'row' : 'column',
+                        gap: '24px',
+                        alignItems: 'stretch'
+                      }}>
+                        {/* Habits Column */}
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <h4 style={{
+                            fontFamily: '"Lilita One", sans-serif',
+                            fontSize: '18px',
+                            color: COLORS.primary,
+                            margin: '0 0 12px 0',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px'
+                          }}>
+                            Recommended Habits 🐾
+                          </h4>
+                          {(!viewingTranslation.carePlan.habits || viewingTranslation.carePlan.habits.length === 0) ? (
+                            <p style={{ fontSize: '13px', color: '#888', fontStyle: 'italic' }}>{activeLocale.noHabits}</p>
+                          ) : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                              {viewingTranslation.carePlan.habits.map((habit, idx) => (
+                                <div
+                                  key={idx}
+                                  style={{
+                                    padding: '12px 14px',
+                                    backgroundColor: '#FFFFFF',
+                                    borderRadius: '12px',
+                                    border: '1.5px solid #F3F4F6',
+                                    boxShadow: '0 2px 6px rgba(0,0,0,0.01)',
+                                    display: 'flex',
+                                    alignItems: 'flex-start',
+                                    gap: '12px'
+                                  }}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={!!selectedHabits[habit.title]}
+                                    onChange={(e) => setSelectedHabits({
+                                      ...selectedHabits,
+                                      [habit.title]: e.target.checked
+                                    })}
+                                    style={{
+                                      cursor: 'pointer',
+                                      width: '18px',
+                                      height: '18px',
+                                      accentColor: COLORS.primary,
+                                      marginTop: '2px'
+                                    }}
+                                  />
+                                  <div style={{ flex: 1 }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px', marginBottom: '4px' }}>
+                                      <span style={{ fontWeight: '700', fontSize: '13.5px', color: '#1E1F22' }}>{habit.title}</span>
+                                      <span style={{
+                                        fontSize: '10px',
+                                        fontWeight: '700',
+                                        backgroundColor: COLORS.bgLight,
+                                        color: COLORS.secondary,
+                                        padding: '2px 6px',
+                                        borderRadius: '6px',
+                                        whiteSpace: 'nowrap'
+                                      }}>
+                                        {habit.frequency}
+                                      </span>
+                                    </div>
+                                    <p style={{ margin: 0, fontSize: '11.5px', color: '#6B7280', lineHeight: '1.4' }}>{habit.description}</p>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* To-Dos Column */}
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <h4 style={{
+                            fontFamily: '"Lilita One", sans-serif',
+                            fontSize: '18px',
+                            color: COLORS.secondary,
+                            margin: '0 0 12px 0',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px'
+                          }}>
+                            One-off To-Dos 🐾
+                          </h4>
+                          {(!viewingTranslation.carePlan.todos || viewingTranslation.carePlan.todos.length === 0) ? (
+                            <p style={{ fontSize: '13px', color: '#888', fontStyle: 'italic' }}>{activeLocale.noTodos}</p>
+                          ) : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                              {viewingTranslation.carePlan.todos.map((todo, idx) => (
+                                <div
+                                  key={idx}
+                                  style={{
+                                    padding: '12px 14px',
+                                    backgroundColor: '#FFFFFF',
+                                    borderRadius: '12px',
+                                    border: '1.5px solid #F3F4F6',
+                                    boxShadow: '0 2px 6px rgba(0,0,0,0.01)',
+                                    display: 'flex',
+                                    alignItems: 'flex-start',
+                                    gap: '12px'
+                                  }}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={!!selectedTodos[todo.title]}
+                                    onChange={(e) => setSelectedTodos({
+                                      ...selectedTodos,
+                                      [todo.title]: e.target.checked
+                                    })}
+                                    style={{
+                                      cursor: 'pointer',
+                                      width: '18px',
+                                      height: '18px',
+                                      accentColor: COLORS.secondary,
+                                      marginTop: '2px'
+                                    }}
+                                  />
+                                  <div style={{ flex: 1 }}>
+                                    <span style={{ fontWeight: '700', fontSize: '13.5px', color: '#1E1F22', display: 'block', marginBottom: '4px' }}>{todo.title}</span>
+                                    <p style={{ margin: 0, fontSize: '11.5px', color: '#6B7280', lineHeight: '1.4' }}>{todo.description}</p>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </div>
 
@@ -1118,14 +1332,43 @@ export default function PetDetail({
               padding: '16px 24px',
               borderTop: '1px solid #F3F4F6',
               display: 'flex',
-              justifyContent: 'flex-end'
+              justifyContent: 'flex-end',
+              gap: '12px'
             }}>
+              {viewingTranslation.carePlan && (
+                <button
+                  onClick={() => {
+                    const habitsToCommit = (viewingTranslation.carePlan.habits || []).filter(h => !!selectedHabits[h.title]);
+                    const todosToCommit = (viewingTranslation.carePlan.todos || []).filter(t => !!selectedTodos[t.title]);
+                    
+                    if (onCommitCarePlan) {
+                      onCommitCarePlan(habitsToCommit, todosToCommit);
+                    }
+                    setViewingTranslation(null);
+                  }}
+                  style={{
+                    padding: '8px 20px',
+                    backgroundColor: COLORS.secondary,
+                    color: '#FFFFFF',
+                    border: 'none',
+                    borderRadius: '10px',
+                    fontWeight: '700',
+                    fontSize: '13px',
+                    cursor: 'pointer',
+                    transition: 'background-color 0.2s'
+                  }}
+                  onMouseOver={(e) => e.target.style.backgroundColor = COLORS.primaryDark}
+                  onMouseOut={(e) => e.target.style.backgroundColor = COLORS.secondary}
+                >
+                  {activeLocale.startTrackingBtn}
+                </button>
+              )}
               <button
                 onClick={() => setViewingTranslation(null)}
                 style={{
                   padding: '8px 20px',
-                  backgroundColor: COLORS.primary,
-                  color: '#FFFFFF',
+                  backgroundColor: '#F3F4F6',
+                  color: '#4B5563',
                   border: 'none',
                   borderRadius: '10px',
                   fontWeight: '700',
@@ -1133,10 +1376,10 @@ export default function PetDetail({
                   cursor: 'pointer',
                   transition: 'background-color 0.2s'
                 }}
-                onMouseOver={(e) => e.target.style.backgroundColor = COLORS.primaryDark}
-                onMouseOut={(e) => e.target.style.backgroundColor = COLORS.primary}
+                onMouseOver={(e) => e.target.style.backgroundColor = '#E5E7EB'}
+                onMouseOut={(e) => e.target.style.backgroundColor = '#F3F4F6'}
               >
-                Close
+                {activeLocale.cancelBtn || 'Close'}
               </button>
             </div>
           </div>

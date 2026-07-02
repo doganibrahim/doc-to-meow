@@ -298,6 +298,77 @@ Just like humans who don't get enough sunshine, pets can sometimes run low on Vi
   }
 });
 
+// Habit Architect Agent (Agent 3) Route
+app.post('/api/architect', async (req, res) => {
+  try {
+    if (!ai) {
+      return res.status(503).json({ error: 'Google Gen AI (Gemini) is not configured on this server. Please set GCP_API_KEY/GEMINI_API_KEY and GCP_PROJECT_ID in .env.' });
+    }
+
+    const { translatedText } = req.body;
+    if (!translatedText) {
+      return res.status(400).json({ error: 'translatedText is required.' });
+    }
+
+    const systemPrompt = `You are Agent 3 (Biscuit), the Habit Architect for veterinary care. 
+Your job is to read an empathetic translation of a vet report and break it down into actionable tasks for the pet owner.
+
+You must extract:
+1. Habits: Actions that must be repeated consistently (daily, twice daily, weekly etc.) to support the cat's health.
+2. To-Dos: One-off tasks that need to be done once to set up the care or follow up.
+
+Keep titles short, friendly, and action-oriented. Keep descriptions brief and contextual.`;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: [
+        `[CLEO'S TRANSLATED REPORT]\n${translatedText}`
+      ],
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: "OBJECT",
+          properties: {
+            habits: {
+              type: "ARRAY",
+              items: {
+                type: "OBJECT",
+                properties: {
+                  title: { type: "STRING", description: "Short action-oriented habit title (e.g. 'Give 5ml kidney syrup')" },
+                  frequency: { type: "STRING", description: "How often, e.g. 'Daily', 'Twice daily', 'Weekly'" },
+                  description: { type: "STRING", description: "Brief context why this is needed." }
+                },
+                required: ["title", "frequency", "description"]
+              }
+            },
+            todos: {
+              type: "ARRAY",
+              items: {
+                type: "OBJECT",
+                properties: {
+                  title: { type: "STRING", description: "Short, one-off action title (e.g. 'Buy renal cat food')" },
+                  description: { type: "STRING", description: "Brief detail why this is needed." }
+                },
+                required: ["title", "description"]
+              }
+            }
+          },
+          required: ["habits", "todos"]
+        },
+        systemInstruction: systemPrompt,
+        temperature: 0.1,
+      }
+    });
+
+    const plan = JSON.parse(response.text || '{}');
+    res.status(200).json(plan);
+
+  } catch (error) {
+    console.error('Server architect handler error:', error);
+    res.status(500).json({ error: error.message || 'Internal Server Error' });
+  }
+});
+
 // Start the Server
 app.listen(port, () => {
   console.log(`Backend server is running on http://localhost:${port}`);
