@@ -106,7 +106,7 @@ export default function PetDetail({
   const [title, setTitle] = useState('');
   const [date, setDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [notes, setNotes] = useState('');
-  const [file, setFile] = useState(null);
+  const [files, setFiles] = useState([]);
 
   // Track which report is being previewed
   const [previewingReportId, setPreviewingReportId] = useState(null);
@@ -125,14 +125,14 @@ export default function PetDetail({
       const todosObj = {};
       const habitsList = viewingTranslation.carePlan.habits || [];
       const todosList = viewingTranslation.carePlan.todos || [];
-      
+
       habitsList.forEach((h, idx) => {
         habitsObj[h.title || idx] = true;
       });
       todosList.forEach((t, idx) => {
         todosObj[t.title || idx] = true;
       });
-      
+
       setSelectedHabits(habitsObj);
       setSelectedTodos(todosObj);
     }
@@ -140,15 +140,17 @@ export default function PetDetail({
 
   const handleSaveReport = async (e) => {
     e.preventDefault();
-    if (!file) return;
+    if (!files.length) return;
 
     setIsUploading(true);
 
     try {
       const formData = new FormData();
-      formData.append('file', file);
+      // Backend uses upload.array('files', 5)
+      for (const f of files) {
+        formData.append('files', f);
+      }
 
-      // Upload file to Express backend
       const response = await fetch('http://localhost:3000/api/upload', {
         method: 'POST',
         body: formData,
@@ -160,16 +162,22 @@ export default function PetDetail({
       }
 
       const uploadData = await response.json();
+      // Backend returns { files: [{ fileUrl, fileName, fileSize, fileType }] }
+      const uploadedFiles = uploadData.files || [];
+      const firstFile = uploadedFiles[0] || {};
 
       const report = {
         id: Date.now().toString(),
-        title: title.trim() || uploadData.fileName || file.name,
+        title: title.trim() || firstFile.fileName || files[0]?.name || 'Report',
         date: date || new Date().toISOString().split('T')[0],
         notes: notes.trim(),
-        fileName: uploadData.fileName || file.name,
-        fileType: uploadData.fileType || file.type,
-        fileSize: uploadData.fileSize || file.size,
-        fileData: uploadData.fileUrl, // Store the public URL from Supabase Storage
+        // Top-level fields for backward compat with old single-file reports
+        fileName: firstFile.fileName || files[0]?.name,
+        fileType: firstFile.fileType || files[0]?.type,
+        fileSize: firstFile.fileSize || files[0]?.size,
+        fileData: firstFile.fileUrl,
+        // Full files array for multi-file extraction
+        files: uploadedFiles,
         uploadedAt: new Date().toISOString()
       };
 
@@ -179,55 +187,15 @@ export default function PetDetail({
       setTitle('');
       setDate(new Date().toISOString().split('T')[0]);
       setNotes('');
-      setFile(null);
+      setFiles([]);
     } catch (err) {
       console.error(err);
-      alert("Failed to upload/save report: " + err.message);
+      alert('Failed to upload/save report: ' + err.message);
     } finally {
       setIsUploading(false);
     }
   };
 
-  const handleExtractText = async (report) => {
-    // If the text is already extracted and stored, just show it
-    if (report.extractedText) {
-      setViewingExtractedText({ title: report.title, text: report.extractedText });
-      return;
-    }
-
-    setExtractingReportId(report.id);
-    setViewingExtractedText({ title: report.title, text: 'loading' });
-
-    try {
-      const response = await fetch('http://localhost:3000/api/extract', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          fileUrl: report.fileData,
-          fileType: report.fileType
-        })
-      });
-
-      if (!response.ok) {
-        const errData = await response.json();
-        throw new Error(errData.error || 'Failed to extract text from document.');
-      }
-
-      const data = await response.json();
-
-      // Save it to state and localStorage so we don't have to extract again
-      onUpdateReport(cat.id, report.id, { extractedText: data.extractedText });
-
-      setViewingExtractedText({ title: report.title, text: data.extractedText });
-    } catch (err) {
-      console.error(err);
-      setViewingExtractedText({ title: report.title, text: `⚠️ Error extracting text: ${err.message}` });
-    } finally {
-      setExtractingReportId(null);
-    }
-  };
 
   const handleTranslateReport = async (report) => {
     // If the translation and care plan are already generated, just show them
@@ -248,15 +216,15 @@ export default function PetDetail({
 
       // 1. If we don't have extracted text, extract it first
       if (!currentExtractedText) {
+        // Pass the files array if available, else fall back to the single fileData field
+        const filesToExtract = report.files && report.files.length > 0
+          ? report.files
+          : [{ fileUrl: report.fileData, fileType: report.fileType }];
+
         const extractResponse = await fetch('http://localhost:3000/api/extract', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            fileUrl: report.fileData,
-            fileType: report.fileType
-          })
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ files: filesToExtract })
         });
 
         if (!extractResponse.ok) {
@@ -266,7 +234,7 @@ export default function PetDetail({
 
         const extractData = await extractResponse.json();
         currentExtractedText = extractData.extractedText;
-        
+
         // Save the extracted text
         onUpdateReport(cat.id, report.id, { extractedText: currentExtractedText });
       }
@@ -291,7 +259,7 @@ export default function PetDetail({
 
         const translateData = await translateResponse.json();
         currentTranslatedText = translateData.translatedText;
-        
+
         // Save the translation
         onUpdateReport(cat.id, report.id, { translatedText: currentTranslatedText });
       }
@@ -315,7 +283,7 @@ export default function PetDetail({
         }
 
         currentCarePlan = await architectResponse.json();
-        
+
         // Save the care plan to the report
         onUpdateReport(cat.id, report.id, {
           translatedText: currentTranslatedText,
@@ -562,174 +530,101 @@ export default function PetDetail({
                     </div>
                   )}
 
-                  {/* Attachment Link & Preview Button */}
-                  <div style={{
-                    marginTop: '12px',
-                    display: 'flex',
-                    flexWrap: 'wrap',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: '10px',
-                    paddingTop: '10px',
-                    borderTop: '1px solid #F9FAFB'
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#6B7280', fontWeight: '600' }}>
-                      <span>📎</span>
-                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '200px' }}>
-                        {report.fileName}
-                      </span>
-                      <span style={{ fontSize: '11px', color: '#9CA3AF', fontWeight: '500' }}>
-                        ({formatBytes(report.fileSize)})
-                      </span>
-                    </div>
+                  {/* Attachments — multi-file */}
+                  {(() => {
+                    // Normalize: prefer files array, fall back to old single-file fields
+                    const attachments = (report.files && report.files.length > 0)
+                      ? report.files
+                      : (report.fileData ? [{ fileUrl: report.fileData, fileName: report.fileName, fileType: report.fileType, fileSize: report.fileSize }] : []);
 
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      {/* Toggle inline preview or open pdf */}
-                      {report.fileType === 'application/pdf' ? (
-                        <button
-                          type="button"
-                          onClick={() => handleOpenPdf(report.fileData, report.fileName)}
-                          style={{
-                            padding: '4px 10px',
-                            backgroundColor: '#F3F4F6',
-                            color: '#4B5563',
-                            border: 'none',
-                            borderRadius: '6px',
-                            fontSize: '11px',
-                            fontWeight: '700',
-                            cursor: 'pointer',
-                            transition: 'background-color 0.2s'
-                          }}
-                          onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#E5E7EB'}
-                          onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#F3F4F6'}
-                        >
-                          👁️ View PDF
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => setPreviewingReportId(previewingReportId === report.id ? null : report.id)}
-                          style={{
-                            padding: '4px 10px',
-                            backgroundColor: '#FFF7ED',
-                            color: COLORS.secondary,
-                            border: 'none',
-                            borderRadius: '6px',
-                            fontSize: '11px',
-                            fontWeight: '700',
-                            cursor: 'pointer',
-                            transition: 'background-color 0.2s'
-                          }}
-                          onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#FFEDD5'}
-                          onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#FFF7ED'}
-                        >
-                          {previewingReportId === report.id ? 'Hide Preview' : '👁️ View Image'}
-                        </button>
-                      )}
+                    if (attachments.length === 0) return null;
 
-                      {/* Extract Text Button */}
-                      <button
-                        type="button"
-                        onClick={() => handleExtractText(report)}
-                        style={{
-                          padding: '4px 10px',
-                          backgroundColor: '#FFF7ED',
-                          color: COLORS.secondary,
-                          border: 'none',
-                          borderRadius: '6px',
-                          fontSize: '11px',
-                          fontWeight: '700',
-                          cursor: 'pointer',
-                          transition: 'background-color 0.2s',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '4px'
-                        }}
-                        onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#FFEDD5'}
-                        onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#FFF7ED'}
-                      >
-                        {extractingReportId === report.id ? '⌛ Extracting...' : '🔍 Extract Text'}
-                      </button>
+                    return (
+                      <div style={{ marginTop: '12px', borderTop: '1px solid #F9FAFB', paddingTop: '10px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        {attachments.map((att, attIdx) => {
+                          const isPdf = att.fileType === 'application/pdf';
+                          const isImg = att.fileType && att.fileType.startsWith('image/');
+                          // Use a composite key for preview state
+                          const previewKey = `${report.id}-${attIdx}`;
+                          return (
+                            <div key={attIdx}>
+                              {/* File row */}
+                              <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#6B7280', fontWeight: '600', minWidth: 0 }}>
+                                  <span>{isPdf ? '📄' : '🖼️'}</span>
+                                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '180px' }}>
+                                    {att.fileName}
+                                  </span>
+                                  <span style={{ fontSize: '11px', color: '#9CA3AF', fontWeight: '500', flexShrink: 0 }}>
+                                    ({formatBytes(att.fileSize || 0)})
+                                  </span>
+                                </div>
 
-                      {/* Translate Report Button */}
-                      <button
-                        type="button"
-                        onClick={() => handleTranslateReport(report)}
-                        style={{
-                          padding: '4px 10px',
-                          backgroundColor: COLORS.primary,
-                          color: '#FFFFFF',
-                          border: 'none',
-                          borderRadius: '6px',
-                          fontSize: '11px',
-                          fontWeight: '700',
-                          cursor: 'pointer',
-                          transition: 'background-color 0.2s',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '4px'
-                        }}
-                        onMouseOver={(e) => e.currentTarget.style.backgroundColor = COLORS.primaryDark}
-                        onMouseOut={(e) => e.currentTarget.style.backgroundColor = COLORS.primary}
-                      >
-                        {translatingReportId === report.id ? `⌛ ${activeLocale.translating}` : activeLocale.translateBtn}
-                      </button>
+                                <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+                                  {isPdf ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenPdf(att.fileUrl, att.fileName)}
+                                      style={{ padding: '3px 8px', backgroundColor: '#F3F4F6', color: '#4B5563', border: 'none', borderRadius: '6px', fontSize: '11px', fontWeight: '700', cursor: 'pointer', transition: 'background-color 0.2s' }}
+                                      onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#E5E7EB'}
+                                      onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#F3F4F6'}
+                                    >
+                                      👁️ View PDF
+                                    </button>
+                                  ) : isImg ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => setPreviewingReportId(previewingReportId === previewKey ? null : previewKey)}
+                                      style={{ padding: '3px 8px', backgroundColor: '#FFF7ED', color: COLORS.secondary, border: 'none', borderRadius: '6px', fontSize: '11px', fontWeight: '700', cursor: 'pointer', transition: 'background-color 0.2s' }}
+                                      onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#FFEDD5'}
+                                      onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#FFF7ED'}
+                                    >
+                                      {previewingReportId === previewKey ? 'Hide' : '👁️ View'}
+                                    </button>
+                                  ) : null}
 
-                      {/* Download Link */}
-                      <a
-                        href={report.fileData}
-                        download={report.fileName}
-                        style={{
-                          padding: '4px 10px',
-                          backgroundColor: '#FFFBF7',
-                          color: COLORS.primaryDark,
-                          border: `1px solid ${COLORS.primary}`,
-                          borderRadius: '6px',
-                          fontSize: '11px',
-                          fontWeight: '700',
-                          textDecoration: 'none',
-                          display: 'flex',
-                          alignItems: 'center',
-                          transition: 'all 0.2s'
-                        }}
-                        onMouseOver={(e) => {
-                          e.currentTarget.style.backgroundColor = COLORS.primary;
-                          e.currentTarget.style.color = '#FFFFFF';
-                        }}
-                        onMouseOut={(e) => {
-                          e.currentTarget.style.backgroundColor = '#FFFBF7';
-                          e.currentTarget.style.color = COLORS.primaryDark;
-                        }}
-                      >
-                        📥 Download
-                      </a>
-                    </div>
-                  </div>
+                                  <a
+                                    href={att.fileUrl}
+                                    download={att.fileName}
+                                    style={{ padding: '3px 8px', backgroundColor: '#FFFBF7', color: COLORS.primaryDark, border: `1px solid ${COLORS.primary}`, borderRadius: '6px', fontSize: '11px', fontWeight: '700', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', transition: 'all 0.2s' }}
+                                    onMouseOver={(e) => { e.currentTarget.style.backgroundColor = COLORS.primary; e.currentTarget.style.color = '#FFF'; }}
+                                    onMouseOut={(e) => { e.currentTarget.style.backgroundColor = '#FFFBF7'; e.currentTarget.style.color = COLORS.primaryDark; }}
+                                  >
+                                    📥
+                                  </a>
+                                </div>
+                              </div>
 
-                  {/* Inline Image Preview */}
-                  {previewingReportId === report.id && report.fileType.startsWith('image/') && (
-                    <div style={{
-                      marginTop: '12px',
-                      padding: '8px',
-                      backgroundColor: '#F9FAFB',
-                      borderRadius: '12px',
-                      border: '1px solid #E5E7EB',
-                      display: 'flex',
-                      justifyContent: 'center',
-                      overflow: 'hidden'
-                    }}>
-                      <img
-                        src={report.fileData}
-                        alt={report.fileName}
-                        style={{
-                          maxWidth: '100%',
-                          maxHeight: '300px',
-                          borderRadius: '8px',
-                          objectFit: 'contain'
-                        }}
-                      />
-                    </div>
-                  )}
+                              {/* Inline image preview */}
+                              {previewingReportId === previewKey && isImg && (
+                                <div style={{ marginTop: '8px', padding: '8px', backgroundColor: '#F9FAFB', borderRadius: '12px', border: '1px solid #E5E7EB', display: 'flex', justifyContent: 'center', overflow: 'hidden' }}>
+                                  <img
+                                    src={att.fileUrl}
+                                    alt={att.fileName}
+                                    style={{ maxWidth: '100%', maxHeight: '300px', borderRadius: '8px', objectFit: 'contain' }}
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+
+                        {/* Action buttons row — shared for the whole report */}
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '4px' }}>
+                          <button
+                            type="button"
+                            onClick={() => handleTranslateReport(report)}
+                            style={{ padding: '5px 12px', backgroundColor: COLORS.primary, color: '#FFFFFF', border: 'none', borderRadius: '6px', fontSize: '11px', fontWeight: '700', cursor: 'pointer', transition: 'background-color 0.2s', display: 'flex', alignItems: 'center', gap: '4px' }}
+                            onMouseOver={(e) => e.currentTarget.style.backgroundColor = COLORS.primaryDark}
+                            onMouseOut={(e) => e.currentTarget.style.backgroundColor = COLORS.primary}
+                          >
+                            {translatingReportId === report.id ? `⌛ ${activeLocale.translating}` : activeLocale.translateBtn}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
                 </div>
               ))}
             </div>
@@ -762,8 +657,8 @@ export default function PetDetail({
             {/* Dropzone field */}
             <div>
               <DragDropUpload
-                file={file}
-                onFileChange={setFile}
+                files={files}
+                onFilesChange={setFiles}
                 activeLocale={activeLocale}
               />
             </div>
@@ -775,7 +670,7 @@ export default function PetDetail({
               </label>
               <input
                 type="text"
-                placeholder={file ? file.name.substring(0, file.name.lastIndexOf('.')) || file.name : "e.g. Annual Checkup"}
+                placeholder={files.length > 0 ? (files[0].name.substring(0, files[0].name.lastIndexOf('.')) || files[0].name) : 'e.g. Annual Checkup'}
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 style={{
@@ -851,28 +746,30 @@ export default function PetDetail({
             <div style={{ display: 'flex', gap: '12px', marginTop: '4px' }}>
               <button
                 type="submit"
-                disabled={!file || isUploading}
+                disabled={!files.length || isUploading}
                 style={{
                   flex: 1,
                   padding: '12px',
-                  backgroundColor: (file && !isUploading) ? COLORS.primary : '#E5E7EB',
-                  color: (file && !isUploading) ? '#FFFFFF' : '#9CA3AF',
+                  backgroundColor: (files.length && !isUploading) ? COLORS.primary : '#E5E7EB',
+                  color: (files.length && !isUploading) ? '#FFFFFF' : '#9CA3AF',
                   border: 'none',
                   borderRadius: '10px',
                   fontWeight: '700',
                   fontSize: '14px',
-                  cursor: (file && !isUploading) ? 'pointer' : 'not-allowed',
+                  cursor: (files.length && !isUploading) ? 'pointer' : 'not-allowed',
                   transition: 'background-color 0.2s',
-                  boxShadow: (file && !isUploading) ? `0 3px 10px rgba(252, 163, 77, 0.2)` : 'none'
+                  boxShadow: (files.length && !isUploading) ? `0 3px 10px rgba(252, 163, 77, 0.2)` : 'none'
                 }}
                 onMouseOver={(e) => {
-                  if (file && !isUploading) e.currentTarget.style.backgroundColor = COLORS.primaryDark;
+                  if (files.length && !isUploading) e.currentTarget.style.backgroundColor = COLORS.primaryDark;
                 }}
                 onMouseOut={(e) => {
-                  if (file && !isUploading) e.currentTarget.style.backgroundColor = COLORS.primary;
+                  if (files.length && !isUploading) e.currentTarget.style.backgroundColor = COLORS.primary;
                 }}
               >
-                {isUploading ? activeLocale.uploading : activeLocale.saveReportBtn}
+                {isUploading
+                  ? (activeLocale.uploading + (files.length > 1 ? ` (${files.length} files)` : ''))
+                  : activeLocale.saveReportBtn}
               </button>
 
               <button
@@ -881,7 +778,7 @@ export default function PetDetail({
                   setTitle('');
                   setDate(new Date().toISOString().split('T')[0]);
                   setNotes('');
-                  setFile(null);
+                  setFiles([]);
                 }}
                 style={{
                   padding: '12px 16px',
@@ -1340,7 +1237,7 @@ export default function PetDetail({
                   onClick={() => {
                     const habitsToCommit = (viewingTranslation.carePlan.habits || []).filter(h => !!selectedHabits[h.title]);
                     const todosToCommit = (viewingTranslation.carePlan.todos || []).filter(t => !!selectedTodos[t.title]);
-                    
+
                     if (onCommitCarePlan) {
                       onCommitCarePlan(habitsToCommit, todosToCommit);
                     }

@@ -1,128 +1,211 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { COLORS } from '../../constants/theme';
 
+const MAX_FILES = 5;
+
+const formatBytes = (bytes, decimals = 1) => {
+  if (!+bytes) return '0 B';
+  const k = 1024;
+  const dm = decimals < 0 ? 0 : decimals;
+  const sizes = ['B', 'KB', 'MB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
+};
+
+function FileThumb({ file, onRemove }) {
+  const [previewUrl, setPreviewUrl] = useState('');
+
+  useEffect(() => {
+    if (file.type.startsWith('image/')) {
+      const url = URL.createObjectURL(file);
+      setPreviewUrl(url);
+      return () => URL.revokeObjectURL(url);
+    }
+  }, [file]);
+
+  return (
+    <div style={{
+      position: 'relative',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '10px',
+      padding: '10px 12px',
+      backgroundColor: '#FFFFFF',
+      border: '1.5px solid #E5E7EB',
+      borderRadius: '12px',
+      boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
+      minWidth: 0
+    }}>
+      {/* Thumbnail */}
+      {previewUrl ? (
+        <div style={{
+          width: '44px', height: '44px', borderRadius: '8px', overflow: 'hidden',
+          flexShrink: 0, backgroundColor: '#F3F4F6', border: '1px solid #E5E7EB'
+        }}>
+          <img src={previewUrl} alt="preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+        </div>
+      ) : (
+        <div style={{
+          width: '44px', height: '44px', borderRadius: '8px', backgroundColor: '#FEF2F2',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: '22px', flexShrink: 0, border: '1.5px solid #FEE2E2'
+        }}>
+          📄
+        </div>
+      )}
+
+      {/* Info */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{
+          fontSize: '12px', fontWeight: '700', color: '#1E1F22',
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
+        }}>
+          {file.name}
+        </div>
+        <div style={{ display: 'flex', gap: '6px', marginTop: '3px', alignItems: 'center' }}>
+          <span style={{
+            fontSize: '10px', fontWeight: '700', color: '#6B7280',
+            backgroundColor: '#F3F4F6', padding: '1px 5px', borderRadius: '5px', textTransform: 'uppercase'
+          }}>
+            {file.type.split('/')[1] || 'FILE'}
+          </span>
+          <span style={{ fontSize: '11px', color: '#9CA3AF' }}>{formatBytes(file.size)}</span>
+        </div>
+      </div>
+
+      {/* Remove */}
+      <button
+        type="button"
+        onClick={onRemove}
+        style={{
+          background: 'none', border: 'none', cursor: 'pointer',
+          color: '#D1D5DB', fontSize: '16px', lineHeight: 1,
+          padding: '2px 4px', flexShrink: 0, borderRadius: '4px',
+          transition: 'color 0.15s'
+        }}
+        onMouseOver={(e) => e.currentTarget.style.color = '#EF4444'}
+        onMouseOut={(e) => e.currentTarget.style.color = '#D1D5DB'}
+        title="Remove file"
+      >
+        ✕
+      </button>
+    </div>
+  );
+}
+
 export default function DragDropUpload({
-  file,
-  onFileChange,
+  files = [],
+  onFilesChange,
   activeLocale,
   style = {}
 }) {
   const [isDragActive, setIsDragActive] = useState(false);
   const [error, setError] = useState('');
-  const [previewUrl, setPreviewUrl] = useState('');
   const fileInputRef = useRef(null);
 
-  useEffect(() => {
-    if (!file) {
-      setPreviewUrl('');
-      return;
-    }
+  const supportedTypes = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg'];
+  const maxSize = 10 * 1024 * 1024;
 
-    if (file.type.startsWith('image/')) {
-      const url = URL.createObjectURL(file);
-      setPreviewUrl(url);
-      return () => URL.revokeObjectURL(url);
-    } else {
-      setPreviewUrl('');
-    }
-  }, [file]);
-
-  const validateFile = (selectedFile) => {
-    if (!selectedFile) return false;
-
-    // Supported types: images and PDF
-    const supportedTypes = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg'];
-    if (!supportedTypes.includes(selectedFile.type)) {
-      setError(activeLocale.invalidFormat);
-      return false;
-    }
-
-    // Size limit: 10MB (10 * 1024 * 1024 bytes)
-    const maxSize = 10 * 1024 * 1024;
-    if (selectedFile.size > maxSize) {
-      setError(activeLocale.fileTooLarge);
-      return false;
-    }
-
+  const addFiles = (incoming) => {
     setError('');
-    return true;
+    const valid = [];
+    for (const f of incoming) {
+      if (!supportedTypes.includes(f.type)) {
+        setError(activeLocale.invalidFormat);
+        continue;
+      }
+      if (f.size > maxSize) {
+        setError(activeLocale.fileTooLarge);
+        continue;
+      }
+      // Skip duplicates (same name + size)
+      if (files.some(existing => existing.name === f.name && existing.size === f.size)) continue;
+      valid.push(f);
+    }
+
+    const combined = [...files, ...valid];
+    if (combined.length > MAX_FILES) {
+      setError(`Max ${MAX_FILES} files allowed.`);
+      onFilesChange(combined.slice(0, MAX_FILES));
+    } else {
+      onFilesChange(combined);
+    }
+  };
+
+  const removeFile = (idx) => {
+    const updated = files.filter((_, i) => i !== idx);
+    onFilesChange(updated);
+    if (error) setError('');
   };
 
   const handleDrag = (e) => {
     e.preventDefault();
     e.stopPropagation();
-    if (e.type === 'dragenter' || e.type === 'dragover') {
-      setIsDragActive(true);
-    } else if (e.type === 'dragleave') {
-      setIsDragActive(false);
-    }
+    if (e.type === 'dragenter' || e.type === 'dragover') setIsDragActive(true);
+    else setIsDragActive(false);
   };
 
   const handleDrop = (e) => {
     e.preventDefault();
     e.stopPropagation();
     setIsDragActive(false);
-
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      const droppedFile = e.dataTransfer.files[0];
-      if (validateFile(droppedFile)) {
-        onFileChange(droppedFile);
-      }
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      addFiles(Array.from(e.dataTransfer.files));
     }
   };
 
   const handleFileSelect = (e) => {
-    if (e.target.files && e.target.files[0]) {
-      const selectedFile = e.target.files[0];
-      if (validateFile(selectedFile)) {
-        onFileChange(selectedFile);
-      }
+    if (e.target.files && e.target.files.length > 0) {
+      addFiles(Array.from(e.target.files));
     }
+    // Reset input so the same file can be re-added after removal
+    e.target.value = '';
   };
 
-  const onButtonClick = () => {
-    fileInputRef.current.click();
-  };
-
-  const formatBytes = (bytes, decimals = 2) => {
-    if (!+bytes) return '0 Bytes';
-    const k = 1024;
-    const dm = decimals < 0 ? 0 : decimals;
-    const sizes = ['Bytes', 'KB', 'MB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
-  };
+  const remaining = MAX_FILES - files.length;
+  const canAddMore = remaining > 0;
 
   return (
     <div style={{ width: '100%', ...style }}>
       <input
         ref={fileInputRef}
         type="file"
+        multiple
         style={{ display: 'none' }}
-        accept=".pdf, image/png, image/jpeg, image/jpg"
+        accept=".pdf,image/png,image/jpeg,image/jpg"
         onChange={handleFileSelect}
       />
 
-      {!file ? (
+      {/* Selected files list */}
+      {files.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '10px' }}>
+          {files.map((f, idx) => (
+            <FileThumb key={`${f.name}-${f.size}-${idx}`} file={f} onRemove={() => removeFile(idx)} />
+          ))}
+        </div>
+      )}
+
+      {/* Drop zone — always visible while under the limit */}
+      {canAddMore && (
         <div
           onDragEnter={handleDrag}
           onDragOver={handleDrag}
           onDragLeave={handleDrag}
           onDrop={handleDrop}
-          onClick={onButtonClick}
+          onClick={() => fileInputRef.current.click()}
           style={{
             width: '100%',
-            minHeight: '160px',
+            minHeight: files.length > 0 ? '90px' : '160px',
             border: isDragActive
               ? `2.5px dashed ${COLORS.secondary}`
-              : '2px dashed #D1D5DB',
+              : files.length > 0 ? '2px dashed #D1D5DB' : '2px dashed #D1D5DB',
             borderRadius: '16px',
-            backgroundColor: isDragActive ? '#FFF7ED' : '#FAFAFA',
+            backgroundColor: isDragActive ? '#FFF7ED' : files.length > 0 ? '#FAFAFA' : '#FAFAFA',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            padding: '24px',
+            padding: '16px 24px',
             boxSizing: 'border-box',
             cursor: 'pointer',
             transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
@@ -137,165 +220,51 @@ export default function DragDropUpload({
           onMouseOut={(e) => {
             if (!isDragActive) {
               e.currentTarget.style.borderColor = '#D1D5DB';
-              e.currentTarget.style.backgroundColor = '#FAFAFA';
+              e.currentTarget.style.backgroundColor = files.length > 0 ? '#FAFAFA' : '#FAFAFA';
             }
           }}
         >
-          {/* Cute Cat-Upload Icon */}
-          <div style={{ fontSize: '38px', marginBottom: '12px', userSelect: 'none' }}>
-            {isDragActive ? '📥' : '📂'}
-          </div>
-          
-          <p style={{
-            margin: '0 0 6px 0',
-            fontSize: '14px',
-            fontWeight: '600',
-            color: isDragActive ? COLORS.secondary : '#4B5563',
-            textAlign: 'center',
-            lineHeight: '1.4'
-          }}>
-            {activeLocale.dropzonePrompt}
-          </p>
-          
-          <p style={{
-            margin: 0,
-            fontSize: '12px',
-            fontWeight: '500',
-            color: '#9CA3AF',
-            textAlign: 'center'
-          }}>
-            {activeLocale.dropzoneFormats}
-          </p>
-        </div>
-      ) : (
-        /* File Selected State Details */
-        <div style={{
-          width: '100%',
-          padding: '16px',
-          borderRadius: '16px',
-          border: '1.5px solid #E5E7EB',
-          backgroundColor: '#FFFFFF',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '16px',
-          boxSizing: 'border-box',
-          boxShadow: '0 2px 10px rgba(0,0,0,0.02)'
-        }}>
-          {/* File Thumbnail or Icon */}
-          {file.type.startsWith('image/') && previewUrl ? (
-            <div style={{
-              width: '64px',
-              height: '64px',
-              borderRadius: '10px',
-              overflow: 'hidden',
-              backgroundColor: '#F3F4F6',
-              flexShrink: 0,
-              border: '1px solid #E5E7EB',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
-            }}>
-              <img
-                src={previewUrl}
-                alt="Upload preview"
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  objectFit: 'cover'
-                }}
-              />
-            </div>
-          ) : (
-            <div style={{
-              width: '64px',
-              height: '64px',
-              borderRadius: '10px',
-              backgroundColor: '#FEF2F2',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '28px',
-              color: '#EF4444',
-              flexShrink: 0,
-              border: '1.5px solid #FEE2E2',
-              fontWeight: 'bold',
-              userSelect: 'none'
-            }}>
-              📄
+          {files.length === 0 && (
+            <div style={{ fontSize: '32px', marginBottom: '10px', userSelect: 'none' }}>
+              {isDragActive ? '📥' : '📂'}
             </div>
           )}
 
-          {/* File Info */}
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <h4 style={{
-              margin: '0 0 4px 0',
-              fontSize: '14px',
-              fontWeight: '700',
-              color: '#1E1F22',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap'
-            }}>
-              {file.name}
-            </h4>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{
-                fontSize: '11px',
-                fontWeight: '600',
-                color: '#6B7280',
-                backgroundColor: '#F3F4F6',
-                padding: '2px 6px',
-                borderRadius: '6px',
-                textTransform: 'uppercase'
-              }}>
-                {file.type.split('/')[1] || 'FILE'}
-              </span>
-              <span style={{ fontSize: '12px', fontWeight: '500', color: '#9CA3AF' }}>
-                {formatBytes(file.size)}
-              </span>
-            </div>
-          </div>
+          <p style={{
+            margin: '0 0 4px 0', fontSize: files.length > 0 ? '13px' : '14px',
+            fontWeight: '600', color: isDragActive ? COLORS.secondary : '#4B5563',
+            textAlign: 'center', lineHeight: '1.4'
+          }}>
+            {files.length > 0
+              ? `Add more files (${remaining} remaining)`
+              : activeLocale.dropzonePrompt}
+          </p>
 
-          {/* Remove Button */}
-          <button
-            type="button"
-            onClick={() => onFileChange(null)}
-            style={{
-              padding: '6px 12px',
-              backgroundColor: 'transparent',
-              border: '1.5px solid #F3F4F6',
-              color: '#EF4444',
-              borderRadius: '8px',
-              fontSize: '12px',
-              fontWeight: '700',
-              cursor: 'pointer',
-              transition: 'all 0.2s',
-              flexShrink: 0
-            }}
-            onMouseOver={(e) => {
-              e.currentTarget.style.backgroundColor = '#FEF2F2';
-              e.currentTarget.style.borderColor = '#FCA5A5';
-            }}
-            onMouseOut={(e) => {
-              e.currentTarget.style.backgroundColor = 'transparent';
-              e.currentTarget.style.borderColor = '#F3F4F6';
-            }}
-          >
-            {activeLocale.deleteCat}
-          </button>
+          {files.length === 0 && (
+            <p style={{ margin: 0, fontSize: '12px', fontWeight: '500', color: '#9CA3AF', textAlign: 'center' }}>
+              {activeLocale.dropzoneFormats} &nbsp;·&nbsp; up to {MAX_FILES} files
+            </p>
+          )}
         </div>
       )}
 
-      {/* Error Message */}
+      {/* At-limit indicator */}
+      {!canAddMore && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px',
+          fontSize: '12px', fontWeight: '600', color: COLORS.secondary
+        }}>
+          <span>Max {MAX_FILES} files selected. Remove one to add another.</span>
+        </div>
+      )}
+
+      {/* Error */}
       {error && (
         <div style={{
-          marginTop: '8px',
-          color: '#EF4444',
-          fontSize: '12px',
-          fontWeight: '600',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '4px'
+          marginTop: '8px', color: '#EF4444', fontSize: '12px', fontWeight: '600',
+          display: 'flex', alignItems: 'center', gap: '4px'
         }}>
-          <span>⚠️</span> {error}
+          ⚠️ {error}
         </div>
       )}
     </div>

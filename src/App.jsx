@@ -164,7 +164,7 @@ function App() {
 
   const handleCommitCarePlan = (habits, todos) => {
     if (!selectedCatId) return;
-    
+
     setCats(prevCats => prevCats.map(c => {
       if (c.id === selectedCatId) {
         // Build active habits
@@ -176,7 +176,7 @@ function App() {
           completions: {},
           streak: 0
         }));
-        
+
         // Build active todos
         const newTodos = todos.map(t => ({
           id: `${t.title}-${Date.now()}-${Math.random()}`,
@@ -212,7 +212,7 @@ function App() {
           if (h.id === habitId) {
             const completions = { ...(h.completions || {}) };
             const isCompleted = !!completions[dateStr];
-            
+
             if (isCompleted) {
               delete completions[dateStr];
             } else {
@@ -222,7 +222,7 @@ function App() {
             // Calculate streak based on completions
             let currentStreak = 0;
             let checkDate = new Date();
-            
+
             while (true) {
               const formattedCheckDate = checkDate.toISOString().split('T')[0];
               if (completions[formattedCheckDate]) {
@@ -454,7 +454,7 @@ function App() {
             {viewMode !== 'detail' && (
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
                 <CatAvatar3D color={activeViewerColor} width={isDesktop ? 360 : 220} height={isDesktop ? 360 : 220} />
-                
+
                 {viewMode === 'add' && (
                   <div style={{ marginBottom: '20px', textAlign: 'center' }}>
                     <p style={{ margin: '0 0 10px 0', fontSize: '13px', fontWeight: 'bold', color: '#555' }}>
@@ -1020,12 +1020,12 @@ function App() {
                         </div>
                       )}
 
-                      <div 
-                        style={{ 
-                          maxHeight: isDesktop ? '280px' : '220px', 
-                          overflowY: 'auto', 
-                          display: 'flex', 
-                          flexDirection: 'column', 
+                      <div
+                        style={{
+                          maxHeight: isDesktop ? '280px' : '220px',
+                          overflowY: 'auto',
+                          display: 'flex',
+                          flexDirection: 'column',
                           gap: '10px',
                           paddingRight: '4px'
                         }}

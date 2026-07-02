@@ -72,42 +72,50 @@ app.get('/health', (req, res) => {
 });
 
 // File Upload Endpoint
-app.post('/api/upload', upload.single('file'), async (req, res) => {
+app.post('/api/upload', upload.array('files', 5), async (req, res) => {
   try {
-    if (!req.file) {
-      return res.status(400).json({ error: 'No file provided.' });
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ error: 'No files provided.' });
     }
 
-    // Generate a unique filename while preserving extension
-    const originalName = req.file.originalname;
-    const fileExt = originalName.split('.').pop();
-    const uniqueFileName = `${uuidv4()}.${fileExt}`;
-    const filePath = `reports/${uniqueFileName}`;
+    const uploadedFiles = [];
 
-    // Upload to Supabase Storage Bucket
-    const { data, error } = await supabase.storage
-      .from('vet-reports')
-      .upload(filePath, req.file.buffer, {
-        contentType: req.file.mimetype,
-        upsert: false
+    for (const file of req.files) {
+      // Generate a unique filename while preserving extension
+      const originalName = file.originalname;
+      const fileExt = originalName.split('.').pop();
+      const uniqueFileName = `${uuidv4()}.${fileExt}`;
+      const filePath = `reports/${uniqueFileName}`;
+
+      // Upload to Supabase Storage Bucket
+      const { error } = await supabase.storage
+        .from('vet-reports')
+        .upload(filePath, file.buffer, {
+          contentType: file.mimetype,
+          upsert: false
+        });
+
+      if (error) {
+        console.error('Supabase upload error:', error);
+        throw error;
+      }
+
+      // Retrieve public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('vet-reports')
+        .getPublicUrl(filePath);
+
+      uploadedFiles.push({
+        fileUrl: publicUrl,
+        fileName: originalName,
+        fileSize: file.size,
+        fileType: file.mimetype
       });
-
-    if (error) {
-      console.error('Supabase upload error:', error);
-      throw error;
     }
-
-    // Retrieve public URL
-    const { data: { publicUrl } } = supabase.storage
-      .from('vet-reports')
-      .getPublicUrl(filePath);
 
     res.status(200).json({
-      message: 'File uploaded successfully!',
-      fileUrl: publicUrl,
-      fileName: originalName,
-      fileSize: req.file.size,
-      fileType: req.file.mimetype
+      message: 'Files uploaded successfully!',
+      files: uploadedFiles
     });
 
   } catch (error) {
@@ -155,40 +163,50 @@ app.post('/api/extract', async (req, res) => {
       return res.status(503).json({ error: 'Google Gen AI (Gemini) is not configured on this server. Please set GCP_API_KEY/GEMINI_API_KEY and GCP_PROJECT_ID in .env.' });
     }
 
-    const { fileUrl, fileType } = req.body;
-    if (!fileUrl || !fileType) {
-      return res.status(400).json({ error: 'fileUrl and fileType are required.' });
+    const { fileUrl, fileType, files } = req.body;
+
+    // Support either a files array (multi-file) or single fileUrl/fileType fallback
+    const filesToExtract = files || (fileUrl && fileType ? [{ fileUrl, fileType }] : []);
+
+    if (!filesToExtract || filesToExtract.length === 0) {
+      return res.status(400).json({ error: 'files array or fileUrl/fileType is required.' });
     }
 
-    // Fetch the file as ArrayBuffer from Supabase storage
-    const fileResponse = await fetch(fileUrl);
-    if (!fileResponse.ok) {
-      return res.status(fileResponse.status).json({
-        error: `Failed to fetch file from storage: ${fileResponse.statusText}`
+    const generativeParts = [];
+
+    for (const f of filesToExtract) {
+      if (!f.fileUrl || !f.fileType) continue;
+
+      const fileResponse = await fetch(f.fileUrl);
+      if (!fileResponse.ok) {
+        throw new Error(`Failed to fetch file from storage: ${f.fileUrl}`);
+      }
+
+      const arrayBuffer = await fileResponse.arrayBuffer();
+      const fileBuffer = Buffer.from(arrayBuffer);
+
+      generativeParts.push({
+        inlineData: {
+          data: fileBuffer.toString('base64'),
+          mimeType: f.fileType
+        }
       });
     }
 
-    const arrayBuffer = await fileResponse.arrayBuffer();
-    const fileBuffer = Buffer.from(arrayBuffer);
+    if (generativeParts.length === 0) {
+      return res.status(400).json({ error: 'Could not prepare any valid files for text extraction.' });
+    }
 
-    // Prepare generative model part (inlineData format)
-    const generativePart = {
-      inlineData: {
-        data: fileBuffer.toString('base64'),
-        mimeType: fileType
-      }
-    };
-
-    // Request text extraction using the new unified SDK
+    // Request text extraction — all files sent together in one Gemini call
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: [
-        generativePart,
-        'Extract all text and tabular data from this veterinary document.'
+        ...generativeParts,
+        'Extract ALL text, numbers, tables, and annotations from these documents. Preserve layout and structure. Use Markdown tables for tabular data. Organize by document/page if multiple files are present.'
       ],
       config: {
-        systemInstruction: "You are Agent 1 (The Data Extractor) for veterinary records. Your only task is to extract ALL raw text, values, tables, and handwritten annotations from the provided document. Do NOT translate medical jargon, do NOT write care recommendations, do NOT summarize, and do NOT make any medical assumptions. Return ONLY the exact raw text data found in the document, keeping layout formatting where appropriate (e.g. Markdown tables for structured data).",
-        temperature: 0.2,
+        systemInstruction: "You are Agent 1 (Pepper), a raw data extractor for health records. Your ONLY job is to faithfully extract and transcribe every piece of text, number, value, table, and annotation from the provided document(s). NEVER refuse, filter, or skip any data regardless of whether the documents appear to be for animals or humans. NEVER summarize, translate, diagnose, or interpret. Return ONLY the exact raw text and structured data found in the documents.",
+        temperature: 0.1,
       }
     });
 
@@ -215,14 +233,21 @@ app.post('/api/translate', async (req, res) => {
     }
 
     const systemPrompt = `# SYSTEM INSTRUCTION
-You are an empathetic, knowledgeable, and reassuring veterinary health communicator. Your job is to take raw, clinical, and sometimes intimidating medical data (provided by the analytical Agent 1) and translate it into warm, easy-to-understand, and actionable language for pet owners.
+You are Cleo, an empathetic, warm, and knowledgeable veterinary health communicator. Your job is to take raw, clinical lab data or medical documents (extracted by Agent 1, Pepper) and translate them into friendly, easy-to-understand, and actionable language for pet owners.
 
-# GUIDELINES
+# CRITICAL RULES — NEVER BREAK THESE
+- You MUST ALWAYS produce a meaningful translation. NEVER refuse input based on its format, origin, or content type.
+- Even if the documents appear to contain human lab results, generic medical data, or results with human-specific ranges: TRANSLATE THEM ANYWAY, framing the values as if they apply to the pet. Ignore the source origin entirely.
+- NEVER say things like "these appear to be from a human patient" or suggest the user share different documents.
+- ALWAYS treat all data as valid lab work for the pet in question.
+
+# TRANSLATION GUIDELINES
 1. Empathy First: Acknowledge that medical jargon is scary. Always start with a reassuring or positive note if possible.
 2. Demystify the Jargon: Explain "red" (out-of-range: H or L) values in simple, everyday analogies. Do not use complex medical terms without defining them simply.
-3. Prevent Panic: If a value is slightly high/low but clinically insignificant (like mild dehydration), explicitly state that it is common and not a cause for panic. 
+3. Prevent Panic: If a value is slightly high/low but clinically insignificant (like mild dehydration), explicitly state that it is common and not a cause for panic.
 4. Actionable Next Steps: Always provide a calm, clear next step (e.g., "make sure they drink water," "schedule a routine follow-up with your vet").
 5. Do Not Diagnose: Remind the user that you are an AI assistant helping them prepare for their vet visit, not replacing their vet.
+6. Be Thorough: Walk through all notable values. Don't skip sections.
 
 # IN-CONTEXT LEARNING EXAMPLES
 
@@ -231,7 +256,7 @@ You are an empathetic, knowledgeable, and reassuring veterinary health communica
 Analysis: 
 - Platelet Count: 492 H (Ref: 140-400 Thousand/uL)
 - Red Blood Cell Count: 5.13 H (Ref: 3.80-5.10 Million/uL)
-- All other CMP and CBC values: GREEN/Normal.
+- All other CMP and CBC values: GREEN/GRAY/Normal.
 - Interpretation: Mild thrombocytosis and slightly elevated RBC. Likely benign, possible mild dehydration.
 
 [YOUR TRANSLATION]:
