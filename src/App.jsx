@@ -182,7 +182,7 @@ function App() {
           borderRadius: '24px',
           boxShadow: '0 8px 30px rgba(0, 0, 0, 0.06)',
           textAlign: 'center',
-          maxWidth: (isSignedIn && isDesktop) ? '1000px' : '440px',
+          maxWidth: (isSignedIn && isDesktop) ? (viewMode === 'detail' ? '1200px' : '1000px') : '440px',
           width: '100%',
           boxSizing: 'border-box',
           transition: 'max-width 0.4s cubic-bezier(0.16, 1, 0.3, 1), padding 0.4s ease',
@@ -298,52 +298,54 @@ function App() {
             }}
           >
             {/* Left Column: 3D Cat Viewer & Color Selector */}
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-              <CatAvatar3D color={activeViewerColor} width={isDesktop ? 360 : 220} height={isDesktop ? 360 : 220} />
-              
-              {viewMode === 'add' && (
-                <div style={{ marginBottom: '20px', textAlign: 'center' }}>
-                  <p style={{ margin: '0 0 10px 0', fontSize: '13px', fontWeight: 'bold', color: '#555' }}>
-                    {active.avatarColor}
-                  </p>
-                  <div style={{ display: 'flex', gap: '14px', justifyContent: 'center' }}>
-                    {Object.keys(CAT_COLORS).map((c) => (
-                      <button
-                        key={c}
-                        type="button"
-                        onClick={() => setAvatarColor(c)}
-                        style={{
-                          width: '32px',
-                          height: '32px',
-                          borderRadius: '50%',
-                          backgroundColor: CAT_COLORS[c].body,
-                          border: avatarColor === c ? `3px solid ${COLORS.secondary}` : '2px solid #E5E7EB',
-                          cursor: 'pointer',
-                          transform: avatarColor === c ? 'scale(1.15)' : 'scale(1.0)',
-                          transition: 'transform 0.2s, border 0.2s',
-                          boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
-                        }}
-                        title={c}
-                      />
-                    ))}
+            {viewMode !== 'detail' && (
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                <CatAvatar3D color={activeViewerColor} width={isDesktop ? 360 : 220} height={isDesktop ? 360 : 220} />
+                
+                {viewMode === 'add' && (
+                  <div style={{ marginBottom: '20px', textAlign: 'center' }}>
+                    <p style={{ margin: '0 0 10px 0', fontSize: '13px', fontWeight: 'bold', color: '#555' }}>
+                      {active.avatarColor}
+                    </p>
+                    <div style={{ display: 'flex', gap: '14px', justifyContent: 'center' }}>
+                      {Object.keys(CAT_COLORS).map((c) => (
+                        <button
+                          key={c}
+                          type="button"
+                          onClick={() => setAvatarColor(c)}
+                          style={{
+                            width: '32px',
+                            height: '32px',
+                            borderRadius: '50%',
+                            backgroundColor: CAT_COLORS[c].body,
+                            border: avatarColor === c ? `3px solid ${COLORS.secondary}` : '2px solid #E5E7EB',
+                            cursor: 'pointer',
+                            transform: avatarColor === c ? 'scale(1.15)' : 'scale(1.0)',
+                            transition: 'transform 0.2s, border 0.2s',
+                            boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
+                          }}
+                          title={c}
+                        />
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              {(viewMode === 'dashboard' || viewMode === 'detail') && selectedCat && (
-                <div style={{
-                  padding: '10px 20px',
-                  borderRadius: '12px',
-                  backgroundColor: COLORS.bgLight,
-                  color: COLORS.primaryDark,
-                  fontWeight: 'bold',
-                  fontSize: '14px',
-                  marginBottom: '20px'
-                }}>
-                  {selectedCat.name} 🐾
-                </div>
-              )}
-            </div>
+                {viewMode === 'dashboard' && selectedCat && (
+                  <div style={{
+                    padding: '10px 20px',
+                    borderRadius: '12px',
+                    backgroundColor: COLORS.bgLight,
+                    color: COLORS.primaryDark,
+                    fontWeight: 'bold',
+                    fontSize: '14px',
+                    marginBottom: '20px'
+                  }}>
+                    {selectedCat.name} 🐾
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Right Column: Dynamic Content Panel */}
             <div style={{ flex: 1, width: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
@@ -519,6 +521,7 @@ function App() {
                   onDeleteReport={handleDeleteReport}
                   onUpdateReport={handleUpdateReport}
                   onBack={() => setViewMode('dashboard')}
+                  isDesktop={isDesktop}
                 />
               )}
 

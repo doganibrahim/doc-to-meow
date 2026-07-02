@@ -28,12 +28,12 @@ I'm a huge believer in the power of compound growth—small, consistent daily ac
 * Create the "Add Pet" interface. I want this to be super cute—users will enter their cat's name, age, weight, and pick a little avatar.
 * Design the main "My Cats" dashboard.
 
-### Day 3: The Report Upload Center
+### Day 3: The Report Upload Center - DONE!!!
 * Build the UI for the "Add New Vet Report" section on the pet's detail page.
 * Implement the drag-and-drop file upload component (supporting PDFs and images).
 * Set up the backend endpoints to securely receive and temporarily store these files.
 
-### Day 4: Unleashing the First Agent (Vision & Data)
+### Day 4: Unleashing the First Agent (Vision & Data) - DONE!!!
 * Build **Agent 1: The Data Extractor**. Its only job is to look at the messy PDFs or photos of vet reports and flawlessly extract the raw text without making any assumptions.
 
 ### Day 5: The Medical Translator Agent

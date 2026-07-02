@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import DragDropUpload from '../ui/DragDropUpload';
+import CatAvatar3D from '../ui/CatAvatar3D';
 import { COLORS } from '../../constants/theme';
 
 export default function PetDetail({
@@ -8,7 +9,8 @@ export default function PetDetail({
   onAddReport,
   onDeleteReport,
   onUpdateReport,
-  onBack
+  onBack,
+  isDesktop
 }) {
   const [title, setTitle] = useState('');
   const [date, setDate] = useState(() => new Date().toISOString().split('T')[0]);
@@ -151,7 +153,7 @@ export default function PetDetail({
   return (
     <div style={{ textAlign: 'left', width: '100%', boxSizing: 'border-box' }}>
       {/* Header Banner */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '20px' }}>
         <button
           type="button"
           onClick={onBack}
@@ -192,6 +194,23 @@ export default function PetDetail({
             />
           </svg>
         </button>
+
+        {/* Small Profile Card with interactive 3D avatar */}
+        <div style={{
+          width: '70px',
+          height: '70px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: '#FFF8F0',
+          borderRadius: '16px',
+          border: `1.5px solid ${COLORS.bgLight}`,
+          overflow: 'hidden',
+          flexShrink: 0
+        }}>
+          <CatAvatar3D color={cat.color || 'orange'} width={70} height={70} />
+        </div>
+
         <div>
           <h2 style={{
             fontFamily: '"Lilita One", sans-serif',
@@ -210,10 +229,15 @@ export default function PetDetail({
         </div>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '30px' }}>
+      <div style={{
+        display: 'flex',
+        flexDirection: isDesktop ? 'row' : 'column',
+        gap: '30px',
+        alignItems: 'stretch'
+      }}>
 
         {/* VET REPORTS LIST SECTION */}
-        <div>
+        <div style={{ flex: 1.2, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
           <h3 style={{
             fontFamily: '"Lilita One", sans-serif',
             fontSize: '20px',
@@ -240,7 +264,17 @@ export default function PetDetail({
               {activeLocale.noReports}
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div
+              className="custom-scrollbar"
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px',
+                maxHeight: isDesktop ? '460px' : 'none',
+                overflowY: isDesktop ? 'auto' : 'visible',
+                paddingRight: '6px'
+              }}
+            >
               {reports.map((report) => (
                 <div
                   key={report.id}
@@ -457,11 +491,15 @@ export default function PetDetail({
 
         {/* ADD NEW VET REPORT FORM */}
         <div style={{
+          flex: 1,
+          minWidth: 0,
           backgroundColor: '#FFFDF9',
           border: `2px solid ${COLORS.bgLight}`,
           borderRadius: '20px',
           padding: '20px',
-          boxSizing: 'border-box'
+          boxSizing: 'border-box',
+          alignSelf: 'flex-start',
+          width: '100%'
         }}>
           <h3 style={{
             fontFamily: '"Lilita One", sans-serif',
@@ -554,7 +592,7 @@ export default function PetDetail({
                   fontFamily: '"Quicksand", sans-serif',
                   boxSizing: 'border-box',
                   outline: 'none',
-                  resize: 'vertical',
+                  resize: 'none',
                   transition: 'border 0.2s'
                 }}
                 onFocus={(e) => e.target.style.border = `1.5px solid ${COLORS.primary}`}
