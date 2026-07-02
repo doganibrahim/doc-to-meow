@@ -3,6 +3,96 @@ import DragDropUpload from '../ui/DragDropUpload';
 import CatAvatar3D from '../ui/CatAvatar3D';
 import { COLORS } from '../../constants/theme';
 
+const renderMarkdown = (text) => {
+  if (!text) return null;
+
+  // Split by double newlines to find paragraphs, headers, or lists
+  const blocks = text.split(/\n\n+/);
+
+  return blocks.map((block, blockIdx) => {
+    block = block.trim();
+    if (!block) return null;
+
+    const parseInlineStyles = (str) => {
+      // Split by ** to find bold text
+      const parts = str.split(/\*\*([^\*]+)\*\*/g);
+      return parts.map((part, index) => {
+        if (index % 2 === 1) {
+          return <strong key={index} style={{ fontWeight: '700', color: '#1E1F22' }}>{part}</strong>;
+        }
+        return part;
+      });
+    };
+
+    // Check if the block is a heading (starts with one or more # followed by space)
+    if (block.startsWith('#')) {
+      const match = block.match(/^(#{1,6})\s+(.*)$/);
+      if (match) {
+        const level = match[1].length;
+        const headingText = match[2];
+        const HeadingTag = `h${level}`;
+        const headingStyles = {
+          fontFamily: '"Lilita One", sans-serif',
+          color: level === 1 || level === 2 ? COLORS.primary : COLORS.secondary,
+          margin: '18px 0 10px 0',
+          fontSize: level === 1 ? '22px' : level === 2 ? '18px' : '16px',
+          lineHeight: '1.3'
+        };
+        return (
+          <HeadingTag key={blockIdx} style={headingStyles}>
+            {parseInlineStyles(headingText)}
+          </HeadingTag>
+        );
+      }
+    }
+
+    // Check if the block is a list (every line starts with * or - or a number like 1.)
+    const lines = block.split('\n');
+    const isList = lines.every(line => /^\s*[\*\-]\s+/.test(line) || /^\s*\d+\.\s+/.test(line));
+
+    if (isList) {
+      const listItems = lines.map((line, lineIdx) => {
+        // Strip the list marker (*, -, or 1.)
+        const content = line.replace(/^\s*[\*\-]\s+/, '').replace(/^\s*\d+\.\s+/, '');
+        return (
+          <li key={lineIdx} style={{ marginBottom: '6px', lineHeight: '1.5' }}>
+            {parseInlineStyles(content)}
+          </li>
+        );
+      });
+
+      const isNumberedList = /^\s*\d+\.\s+/.test(lines[0]);
+      if (isNumberedList) {
+        return (
+          <ol key={blockIdx} style={{ margin: '0 0 14px 20px', padding: 0 }}>
+            {listItems}
+          </ol>
+        );
+      } else {
+        return (
+          <ul key={blockIdx} style={{ margin: '0 0 14px 20px', padding: 0, listStyleType: 'disc' }}>
+            {listItems}
+          </ul>
+        );
+      }
+    }
+
+    // Otherwise, render as a paragraph
+    // Handle inline newlines within a paragraph as line breaks
+    const linesOfParagraph = block.split('\n');
+    return (
+      <p key={blockIdx} style={{ margin: '0 0 14px 0', lineHeight: '1.6' }}>
+        {linesOfParagraph.map((line, lineIdx) => (
+          <React.Fragment key={lineIdx}>
+            {parseInlineStyles(line)}
+            {lineIdx < linesOfParagraph.length - 1 && <br />}
+          </React.Fragment>
+        ))}
+      </p>
+    );
+  });
+};
+
 export default function PetDetail({
   cat,
   activeLocale,
@@ -22,6 +112,8 @@ export default function PetDetail({
   const [isUploading, setIsUploading] = useState(false);
   const [extractingReportId, setExtractingReportId] = useState(null);
   const [viewingExtractedText, setViewingExtractedText] = useState(null);
+  const [translatingReportId, setTranslatingReportId] = useState(null);
+  const [viewingTranslation, setViewingTranslation] = useState(null);
 
   const handleSaveReport = async (e) => {
     e.preventDefault();
@@ -111,6 +203,75 @@ export default function PetDetail({
       setViewingExtractedText({ title: report.title, text: `⚠️ Error extracting text: ${err.message}` });
     } finally {
       setExtractingReportId(null);
+    }
+  };
+
+  const handleTranslateReport = async (report) => {
+    // If the translation is already generated, just show it
+    if (report.translatedText) {
+      setViewingTranslation({ title: report.title, text: report.translatedText });
+      return;
+    }
+
+    setTranslatingReportId(report.id);
+    setViewingTranslation({ title: report.title, text: 'loading' });
+
+    try {
+      let currentExtractedText = report.extractedText;
+
+      // 1. If we don't have extracted text, extract it first
+      if (!currentExtractedText) {
+        const extractResponse = await fetch('http://localhost:3000/api/extract', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            fileUrl: report.fileData,
+            fileType: report.fileType
+          })
+        });
+
+        if (!extractResponse.ok) {
+          const errData = await extractResponse.json();
+          throw new Error(errData.error || 'Failed to extract text from document.');
+        }
+
+        const extractData = await extractResponse.json();
+        currentExtractedText = extractData.extractedText;
+        
+        // Save the extracted text
+        onUpdateReport(cat.id, report.id, { extractedText: currentExtractedText });
+      }
+
+      // 2. Call the translate API
+      const translateResponse = await fetch('http://localhost:3000/api/translate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          extractedText: currentExtractedText
+        })
+      });
+
+      if (!translateResponse.ok) {
+        const errData = await translateResponse.json();
+        throw new Error(errData.error || 'Failed to translate report.');
+      }
+
+      const translateData = await translateResponse.json();
+      const currentTranslatedText = translateData.translatedText;
+
+      // 3. Save the translation to the report
+      onUpdateReport(cat.id, report.id, { translatedText: currentTranslatedText });
+      setViewingTranslation({ title: report.title, text: currentTranslatedText });
+
+    } catch (err) {
+      console.error(err);
+      setViewingTranslation({ title: report.title, text: `⚠️ Error translating report: ${err.message}` });
+    } finally {
+      setTranslatingReportId(null);
     }
   };
 
@@ -426,6 +587,30 @@ export default function PetDetail({
                         onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#FFF7ED'}
                       >
                         {extractingReportId === report.id ? '⌛ Extracting...' : '🔍 Extract Text'}
+                      </button>
+
+                      {/* Translate Report Button */}
+                      <button
+                        type="button"
+                        onClick={() => handleTranslateReport(report)}
+                        style={{
+                          padding: '4px 10px',
+                          backgroundColor: COLORS.primary,
+                          color: '#FFFFFF',
+                          border: 'none',
+                          borderRadius: '6px',
+                          fontSize: '11px',
+                          fontWeight: '700',
+                          cursor: 'pointer',
+                          transition: 'background-color 0.2s',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px'
+                        }}
+                        onMouseOver={(e) => e.currentTarget.style.backgroundColor = COLORS.primaryDark}
+                        onMouseOut={(e) => e.currentTarget.style.backgroundColor = COLORS.primary}
+                      >
+                        {translatingReportId === report.id ? `⌛ ${activeLocale.translating}` : activeLocale.translateBtn}
                       </button>
 
                       {/* Download Link */}
@@ -794,6 +979,149 @@ export default function PetDetail({
             }}>
               <button
                 onClick={() => setViewingExtractedText(null)}
+                style={{
+                  padding: '8px 20px',
+                  backgroundColor: COLORS.primary,
+                  color: '#FFFFFF',
+                  border: 'none',
+                  borderRadius: '10px',
+                  fontWeight: '700',
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                  transition: 'background-color 0.2s'
+                }}
+                onMouseOver={(e) => e.target.style.backgroundColor = COLORS.primaryDark}
+                onMouseOut={(e) => e.target.style.backgroundColor = COLORS.primary}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Translation Viewer Modal */}
+      {viewingTranslation && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(30, 31, 34, 0.6)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999,
+          padding: '20px'
+        }}>
+          <div style={{
+            backgroundColor: '#FFFFFF',
+            borderRadius: '24px',
+            maxWidth: '650px',
+            width: '100%',
+            maxHeight: '80vh',
+            display: 'flex',
+            flexDirection: 'column',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+            border: `2px solid ${COLORS.bgLight}`,
+            animation: 'fadeIn 0.2s ease'
+          }}>
+            {/* Modal Header */}
+            <div style={{
+              padding: '20px 24px',
+              borderBottom: '1px solid #F3F4F6',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+            }}>
+              <h3 style={{
+                margin: 0,
+                fontSize: '18px',
+                fontFamily: '"Lilita One", sans-serif',
+                color: COLORS.primary,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}>
+                🐱 {activeLocale.translationTitle}
+              </h3>
+              <button
+                onClick={() => setViewingTranslation(null)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '20px',
+                  cursor: 'pointer',
+                  color: '#9CA3AF',
+                  transition: 'color 0.2s'
+                }}
+                onMouseOver={(e) => e.target.style.color = '#EF4444'}
+                onMouseOut={(e) => e.target.style.color = '#9CA3AF'}
+              >
+                ✖
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div style={{
+              padding: '24px',
+              overflowY: 'auto',
+              flex: 1,
+              backgroundColor: '#FFFDF9'
+            }}>
+              {viewingTranslation.text === 'loading' ? (
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '40px 0',
+                  gap: '16px'
+                }}>
+                  <div style={{
+                    width: '40px',
+                    height: '40px',
+                    border: `4px solid ${COLORS.bgLight}`,
+                    borderTop: `4px solid ${COLORS.primary}`,
+                    borderRadius: '50%',
+                    animation: 'spin 1s linear infinite'
+                  }} />
+                  <p style={{
+                    margin: 0,
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    color: '#6B7280',
+                    textAlign: 'center'
+                  }}>
+                    Agent Cleo is translating raw data into cozy insights... 🐾
+                  </p>
+                </div>
+              ) : (
+                <div style={{
+                  fontSize: '14px',
+                  color: '#374151',
+                  backgroundColor: '#FFFFFF',
+                  padding: '20px',
+                  borderRadius: '16px',
+                  border: `1.5px solid ${COLORS.bgLight}`,
+                  boxShadow: '0 4px 12px rgba(253, 232, 209, 0.2)'
+                }}>
+                  {renderMarkdown(viewingTranslation.text)}
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div style={{
+              padding: '16px 24px',
+              borderTop: '1px solid #F3F4F6',
+              display: 'flex',
+              justifyContent: 'flex-end'
+            }}>
+              <button
+                onClick={() => setViewingTranslation(null)}
                 style={{
                   padding: '8px 20px',
                   backgroundColor: COLORS.primary,

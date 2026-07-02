@@ -34,5 +34,8 @@ export const cat = {
   invalidFormat: "Hiss! Unsupported file format. Scratch a PDF or an image (PNG, JPG, JPEG).",
   fileTooLarge: "Hiss! File is too large. Max is 10MB for cat-muscles.",
   uploadedAtLabel: "Purred on {date}",
-  visitDateLabel: "Purr-visit date: {date}"
+  visitDateLabel: "Purr-visit date: {date}",
+  translateBtn: "Purr-slate Report 🐾",
+  translating: "Purr-slating...",
+  translationTitle: "Purr-slated Mrows & Insights"
 };

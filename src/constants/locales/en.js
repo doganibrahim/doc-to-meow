@@ -34,5 +34,8 @@ export const en = {
   invalidFormat: "Unsupported file format. Please upload a PDF or an image (PNG, JPG, JPEG).",
   fileTooLarge: "File is too large. Maximum size is 10MB.",
   uploadedAtLabel: "Uploaded on {date}",
-  visitDateLabel: "Visit date: {date}"
+  visitDateLabel: "Visit date: {date}",
+  translateBtn: "Translate Report 🐾",
+  translating: "Translating...",
+  translationTitle: "Empathetic Summary & Insights"
 };

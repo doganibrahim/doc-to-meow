@@ -36,7 +36,7 @@ I'm a huge believer in the power of compound growth—small, consistent daily ac
 ### Day 4: Unleashing the First Agent (Vision & Data) - DONE!!!
 * Build **Agent 1: The Data Extractor**. Its only job is to look at the messy PDFs or photos of vet reports and flawlessly extract the raw text without making any assumptions.
 
-### Day 5: The Medical Translator Agent
+### Day 5: The Medical Translator Agent - DONE!!!
 * Build **Agent 2: The Medical Translator**.
 * I'll use In-Context Learning (providing pre-processed vet reports as a guide) to prompt engineer this agent to take the raw, scary medical jargon from Agent 1 and translate it into warm, reassuring, and easy-to-understand language.
 
